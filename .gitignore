@@ -1,0 +1,31 @@
+# Java / Maven
+target/
+.mvn/
+mvnw
+mvnw.cmd
+*.log
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Frontend
+node_modules/
+dist/
+build/
+.env.local
+
+# Docker
+.dockerignore
+db_data/
+
+# IDEs (Eclipse/VSCode/IntelliJ)
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+.DS_Store

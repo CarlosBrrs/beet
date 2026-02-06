@@ -1,0 +1,27 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: beet-backend
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/beet
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  data:
+    jdbc:
+      repositories:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.beet: DEBUG
+    org.springframework.jdbc.core: INFO # Change to DEBUG to see SQL
