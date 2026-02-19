@@ -10,7 +10,6 @@ services:
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
-      # - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
     depends_on:
       db:
         condition: service_healthy

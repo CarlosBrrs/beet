@@ -219,7 +219,7 @@ INSERT INTO subscription_plans (name, description, price, currency, billing_cycl
     7. Waiter (Mesero): Orders, Tables
 */
 INSERT INTO roles (name, permissions, restaurant_id) VALUES
-('Owner', '{"RESTAURANTS": ["MANAGE"], "SUBSCRIPTION": ["MANAGE"], "FINANCE": ["VIEW_ALL"], "CATALOG": ["MANAGE"], "INVENTORY": ["MANAGE"], "OPERATIONS": ["MANAGE"], "TABLES": ["EDIT"], "ORDERS": ["VOID"], "KDS": ["VIEW"], "RECIPES": ["MANAGE"], "CASH": ["OPEN", "CLOSE"], "PAYMENTS": ["PROCESS"], "KITCHEN": ["COMMENT"]}', NULL);
+('Owner', '{"INVENTORY": ["CREATE", "EDIT", "DELETE"]}', NULL);
 -- ('Branch Manager', '{"operations": ["manage"], "inventory": ["manage"], "tables": ["edit"], "orders": ["void"]}', NULL),
 -- ('Chef', '{"kds": ["view"], "recipes": ["manage"], "inventory": ["view_alerts"]}', NULL),
 -- ('Cook', '{"kds": ["view", "update_status"]}', NULL),
