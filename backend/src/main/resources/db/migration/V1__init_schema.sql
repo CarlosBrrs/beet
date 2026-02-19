@@ -13,7 +13,9 @@ CREATE TABLE subscription_plans (
     name VARCHAR(255) NOT NULL,
     price NUMERIC(10,2) NOT NULL,
     billing_cycle billing_cycle_enum NOT NULL,
-    limits JSONB NOT NULL DEFAULT '{}',
+    description TEXT,
+    currency VARCHAR(3) DEFAULT 'USD' NOT NULL,
+    features JSONB NOT NULL DEFAULT '{}', -- Contains all feature flags and limits
 
     /* Audit */
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
@@ -197,10 +199,10 @@ ALTER TABLE restaurant_taxes ADD CONSTRAINT fk_rt_deleted_by FOREIGN KEY (delete
 /* =========================================================================
    8. Seed Data (Initial Plans)
    ========================================================================= */
-INSERT INTO subscription_plans (name, price, billing_cycle, limits) VALUES
-('Standard', 29.99, 'MONTHLY', '{"max_restaurants": 1, "max_employees": 5}'),
-('Pro', 79.99, 'MONTHLY', '{"max_restaurants": 3, "max_employees": 20}'),
-('Ultimate', 199.99, 'MONTHLY', '{"max_restaurants": 10, "max_employees": 100}');
+INSERT INTO subscription_plans (name, description, price, currency, billing_cycle, features) VALUES
+('Standard', 'Essential tools for small restaurants', 29.99, 'USD', 'MONTHLY', '{"maxRestaurants": 1, "maxEmployees": 5, "advancedReporting": false, "prioritySupport": false, "multiUserAccess": false}'),
+('Pro', 'Advanced features for growing businesses', 79.99, 'USD', 'MONTHLY', '{"maxRestaurants": 3, "maxEmployees": 20, "advancedReporting": true, "prioritySupport": false, "multiUserAccess": true}'),
+('Ultimate', 'Complete solution for large enterprises', 199.99, 'USD', 'MONTHLY', '{"maxRestaurants": 10, "maxEmployees": 100, "advancedReporting": true, "prioritySupport": true, "multiUserAccess": true}');
 
 /* =========================================================================
    9. Seed Data (System Roles)
@@ -216,9 +218,8 @@ INSERT INTO subscription_plans (name, price, billing_cycle, limits) VALUES
     6. Cashier (Cajero): Payments, Cash
     7. Waiter (Mesero): Orders, Tables
 */
--- INSERT INTO roles (name, permissions, restaurant_id) VALUES
--- ('Super Admin', '{"*": ["*"]}', NULL),
--- ('Owner', '{"subscription": ["manage"], "restaurants": ["manage"], "finance": ["view_all"], "catalog": ["manage"]}', NULL),
+INSERT INTO roles (name, permissions, restaurant_id) VALUES
+('Owner', '{"RESTAURANTS": ["MANAGE"], "SUBSCRIPTION": ["MANAGE"], "FINANCE": ["VIEW_ALL"], "CATALOG": ["MANAGE"], "INVENTORY": ["MANAGE"], "OPERATIONS": ["MANAGE"], "TABLES": ["EDIT"], "ORDERS": ["VOID"], "KDS": ["VIEW"], "RECIPES": ["MANAGE"], "CASH": ["OPEN", "CLOSE"], "PAYMENTS": ["PROCESS"], "KITCHEN": ["COMMENT"]}', NULL);
 -- ('Branch Manager', '{"operations": ["manage"], "inventory": ["manage"], "tables": ["edit"], "orders": ["void"]}', NULL),
 -- ('Chef', '{"kds": ["view"], "recipes": ["manage"], "inventory": ["view_alerts"]}', NULL),
 -- ('Cook', '{"kds": ["view", "update_status"]}', NULL),

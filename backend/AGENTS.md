@@ -9,7 +9,7 @@ We follow a **Hexagonal Architecture** organized by **Feature Module**.
 ```text
 com.beet.backend.modules.{featureName}
 ├── domain                          # CORE: Pure Java, No Frameworks
-│   ├── model                       # POJOs (The Domain Objects)
+│   ├── model                       # POJOs (The Domain Objects) -> {Aggregate}Domain
 │   ├── api                         # DRIVING PORTS (Service Interfaces)
 │   ├── spi                         # DRIVEN PORTS (Persistence Interfaces)
 │   ├── exception                   # Domain-specific exceptions
@@ -17,8 +17,8 @@ com.beet.backend.modules.{featureName}
 │
 ├── application                     # ORCHESTRATION: DTOs & Mappers
 │   ├── handler                     # INTERFACE + IMPL (UseCase orchestration)
-│   ├── dto                         # Input/Output DTOs
-│   └── mapper                      # Mapper (DTO <-> Domain)
+│   ├── dto                         # Input/Output DTOs (Records)
+│   └── mapper                      # ServiceMapper (DTO <-> Domain)
 │
 └── infrastructure                  # ADAPTERS: Framework code
     ├── input
@@ -26,11 +26,10 @@ com.beet.backend.modules.{featureName}
     └── output
         └── persistence             # PERSISTENCE ADAPTERS
             ├── jdbc                # STRATEGY: Spring Data JDBC
-            │   ├── aggregate       # JDBC Aggregates (@Table)
-            │   ├── repository      # CrudRepository
-            │   ├── mapper          # Aggregate <-> Domain Mapper
-            │   └── adapter         # Adapter Implementation (@Component)
-
+            │   ├── aggregate       # JDBC Aggregates (@Table) -> {Aggregate}Aggregate
+            │   ├── repository      # CrudRepository -> {Aggregate}JdbcRepository
+            │   ├── mapper          # Aggregate <-> Domain Mapper -> {Aggregate}AggregateMapper
+            │   └── adapter         # Adapter Implementation (@Component) -> {Aggregate}JdbcAdapter
 ├── shared                          # SHARED KERNEL
 │   ├── domain                      # Shared Value Objects / Exceptions
 │   ├── application                 # Shared Utils / Response Wrappers
@@ -41,6 +40,33 @@ com.beet.backend.modules.{featureName}
 *   **Validation Constants**: For DTO annotations (e.g., regex, max lengths).
 *   **Exception Constants**: Error messages for `BeetBusinessException`.
 *   **General Constants**: Other logic constants needed for the module.
+
+## 🔄 Architectural Flow & Responsibilities
+To avoid confusion, here is the strict flow of data and responsibility:
+
+1.  **Infrastructure (Input)**: `{Aggregate}Controller`
+    *   Receives HTTP Request.
+    *   Validates DTO constraints (`@Valid`).
+    *   **Delegates** purely to `{Aggregate}Handler` (Interface).
+    *   Returns `ApiGenericResponse`.
+
+2.  **Application**: `{Aggregate}HandlerImpl`
+    *   **Orchestrates** the flow.
+    *   Uses `{Aggregate}ServiceMapper` to convert `Request` (DTO) -> `{Aggregate}Domain` (Domain Object).
+    *   Calls appropriate `{Aggregate}ServicePort` (UseCase).
+    *   Uses `{Aggregate}ServiceMapper` to convert `{Aggregate}Domain` (Result) -> `{Aggregate}Response` (DTO).
+
+3.  **Domain (Core)**: `{Aggregate}UseCase` (implements `{Aggregate}ServicePort`)
+    *   Contains **ALL** business logic.
+    *   Can inject multiple ServicePorts (other UseCases) for cross-domain logic.
+    *   Calls `{Aggregate}PersistencePort` to save/retrieve data.
+
+4.  **Infrastructure (Output)**: `{Aggregate}JdbcAdapter` (implements `{Aggregate}PersistencePort`)
+    *   **Delegates** DB operations.
+    *   Uses `{Aggregate}AggregateMapper` to convert `{Aggregate}Domain` -> `{Aggregate}Aggregate` (DB Entity).
+    *   Calls `{Aggregate}JdbcRepository` to perform SQL operations.
+    *   Uses `{Aggregate}AggregateMapper` to convert `{Aggregate}Aggregate` -> `{Aggregate}Domain`.
+    *   Returns Domain Object to UseCase.
 
 ---
 
@@ -55,8 +81,8 @@ We use **Spring Data JDBC**. This is fundamentally different from JPA.
     *   *Good*: `Order` has a `UUID userId` field.
 
 ### 2. The Workflow
-1.  **Code**: Create `UserAggregate.java` (mapped to `@Table("users")`).
-2.  **Script**: Write `V1__create_users.sql` in `src/main/resources/db/migration`.
+1.  **Code**: Create `{Aggregate}Aggregate.java` (mapped to `@Table`).
+2.  **Script**: Write `V1__create_{table}.sql` in `src/main/resources/db/migration`.
 3.  **Run**: App starts -> Flyway creates table.
 4.  **Test**: **CRITICAL**. Since JDBC has no startup validation, you **MUST** write `@DataJdbcTest` to verify your Aggregate maps correctly to the Table.
 
@@ -87,7 +113,7 @@ We use **Spring Data JDBC**. This is fundamentally different from JPA.
 @ToString
 @Builder
 @AllArgsConstructor
-public class User {
+public class UserDomain {
     private final UUID id;
     private String email;
 }
@@ -96,7 +122,7 @@ public class User {
 ### Driving Port (API)
 ```java
 public interface UserServicePort {
-    User create(User user);
+    UserDomain create(UserDomain user);
 }
 ```
 
@@ -151,7 +177,7 @@ public class UserJdbcAdapter implements UserPersistencePort {
     private final UserAggregateMapper mapper;
 
     @Override
-    public User save(User user) {
+    public UserDomain save(UserDomain user) {
         UserAggregate aggregate = mapper.toAggregate(user);
         return mapper.toDomain(repository.save(aggregate));
     }
@@ -175,7 +201,7 @@ public class UserUseCase implements UserServicePort {
     private final UserPersistencePort userPersistencePort;
 
     @Transactional
-    public User createUser(User user) {
+    public UserDomain createUser(UserDomain user) {
         // Business Logic...
         if (userPersistencePort.existsByEmail(user.getEmail())) {
              throw new UserAlreadyExistsException(user.getEmail());
@@ -207,3 +233,34 @@ We follow the **"Wide Events"** philosophy.
     2.  **Enrich**: Controllers/UseCases inject the bean and add fields (`user_id`, `cart_total`).
     3.  **End**: Filter logs the bean as a single JSON blob.
 *   **Rule**: **Avoid** ad-hoc `log.info("step 1")`. **Prefer** `event.put("step", 1)`.
+
+### 5. Cross-Module Communication (Gateway Pattern)
+When a module needs data/logic from another module, do **NOT** use direct Repository/Service checks from the foreign module in your UseCase.
+
+**The Pattern**:
+1.  **Define SPI**: `domain/spi/{Target}Gateway.java` (e.g., `RestaurantSubscriptionGateway`).
+2.  **Implement Adapter**: `infrastructure/output/adapter/{Target}GatewayAdapter.java`.
+3.  **Inject**: The Adapter injects the external module's **Service Port** or **Persistence Port**.
+4.  **Return**: Primitives or local DTOs. **Never** return external Domain objects.
+
+**Example**:
+```java
+// Domain
+public interface RestaurantSubscriptionGateway {
+    int getMaxRestaurantsAllowed(UUID ownerId);
+}
+
+// Infrastructure
+@Component
+@RequiredArgsConstructor
+public class RestaurantSubscriptionGatewayAdapter implements RestaurantSubscriptionGateway {
+    private final UserPersistencePort userPort;
+    private final SubscriptionServicePort subPort;
+
+    @Override
+    public int getMaxRestaurantsAllowed(UUID ownerId) {
+        // orchestrated logic...
+        return limit;
+    }
+}
+```

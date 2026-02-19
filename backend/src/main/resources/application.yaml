@@ -7,7 +7,7 @@ spring:
   application:
     name: beet-backend
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/beet
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/beet
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -19,6 +19,14 @@ spring:
     jdbc:
       repositories:
         enabled: true
+
+application:
+  security:
+    jwt:
+      secret-key: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      expiration: 86400000 # 1 day
+      refresh-token:
+        expiration: 604800000 # 7 days
 
 logging:
   level:
