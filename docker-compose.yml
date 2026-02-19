@@ -3,8 +3,11 @@ services:
     build: ./backend
     ports:
       - "8080:8080"
+      - "5005:5005"
     environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
       - DB_HOST=db
+      - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       # - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
@@ -18,7 +21,7 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:

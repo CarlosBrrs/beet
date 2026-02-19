@@ -2,6 +2,7 @@
 
 ## How to Use This Guide
 - **Start Here**: This file is the global map for the project.
+- **Project Scope**: Read the root [README.md](README.md) for a full breakdown of the Restaurant Management SaaS vision.
 - **Component Specifics**: 
     - For Backend rules: Read `backend/AGENTS.md` (Extends this file).
     - For Frontend rules: Read `frontend/AGENTS.md` (Extends this file).

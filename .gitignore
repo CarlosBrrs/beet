@@ -10,6 +10,9 @@ mvnw.cmd
 .vscode/
 *.iml
 .DS_Store
+.classpath
+.project
+.settings/
 
 # Frontend
 node_modules/
@@ -20,12 +23,3 @@ build/
 # Docker
 .dockerignore
 db_data/
-
-# IDEs (Eclipse/VSCode/IntelliJ)
-.idea/
-.vscode/
-*.iml
-.classpath
-.project
-.settings/
-.DS_Store
