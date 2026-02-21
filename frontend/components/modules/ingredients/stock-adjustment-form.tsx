@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Ingredient } from "@/lib/api-types"
+import { MockIngredient } from "@/lib/api-types"
 import { useAdjustStock } from "@/lib/hooks/use-ingredients"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
@@ -33,7 +33,7 @@ const absoluteSchema = z.object({
 })
 
 interface StockAdjustmentFormProps {
-    ingredient: Ingredient
+    ingredient: MockIngredient
     onSuccess: () => void
 }
 

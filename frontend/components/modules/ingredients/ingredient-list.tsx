@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { Ingredient } from "@/lib/api-types"
+import { MockIngredient } from "@/lib/api-types"
 import { DataTable } from "@/components/shared/data-table/data-table"
 import { Button } from "@/components/ui/button"
 import { Can } from "@/components/shared/can"
@@ -12,11 +12,11 @@ import { formatCurrency } from "@/lib/utils"
 
 // Columns Definition
 const createColumns = (
-    onView: (ingredient: Ingredient) => void,
-    onEdit: (ingredient: Ingredient) => void,
-    onAdjust: (ingredient: Ingredient) => void,
-    onDelete: (ingredient: Ingredient) => void
-): ColumnDef<Ingredient>[] => [
+    onView: (ingredient: MockIngredient) => void,
+    onEdit: (ingredient: MockIngredient) => void,
+    onAdjust: (ingredient: MockIngredient) => void,
+    onDelete: (ingredient: MockIngredient) => void
+): ColumnDef<MockIngredient>[] => [
         {
             accessorKey: "name",
             header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
@@ -65,12 +65,12 @@ const createColumns = (
     ]
 
 interface IngredientListProps {
-    ingredients: Ingredient[]
+    ingredients: MockIngredient[]
     isLoading: boolean
-    onView: (ingredient: Ingredient) => void
-    onEdit: (ingredient: Ingredient) => void
-    onAdjust: (ingredient: Ingredient) => void
-    onDelete: (ingredient: Ingredient) => void
+    onView: (ingredient: MockIngredient) => void
+    onEdit: (ingredient: MockIngredient) => void
+    onAdjust: (ingredient: MockIngredient) => void
+    onDelete: (ingredient: MockIngredient) => void
 }
 
 export function IngredientList({ ingredients, isLoading, onView, onEdit, onAdjust, onDelete }: IngredientListProps) {

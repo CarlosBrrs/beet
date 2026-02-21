@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRestaurantContext } from "@/components/providers/restaurant-provider"
 import { useIngredients, useCreateIngredient } from "@/lib/hooks/use-ingredients"
-import { Ingredient } from "@/lib/api-types"
+import { MockIngredient, CreateIngredientRequest } from "@/lib/api-types"
 import { IngredientList } from "@/components/modules/ingredients/ingredient-list"
 import { SheetShell } from "@/components/shared/sheet-shell"
 import { IngredientForm } from "@/components/modules/ingredients/ingredient-form"
@@ -17,6 +17,13 @@ import { StockAdjustmentForm } from "@/components/modules/ingredients/stock-adju
 import { useDeleteIngredient } from "@/lib/hooks/use-ingredients"
 import { toast } from "sonner"
 
+// TODO: [SCALABILITY] The supplier dropdown in IngredientForm currently loads ALL suppliers
+// via useMockSuppliers(). Before scaling, evaluate:
+//   - Paginated / search-based API for suppliers (GET /suppliers?q=…&limit=20)
+//   - Async Select component with debounced search
+//   - Impact on UX when supplier count > 200
+// See also: use-ingredients.ts → useMockSuppliers()
+
 export default function IngredientsPage() {
     const { restaurantId } = useRestaurantContext()
     const { data: ingredients, isLoading, isError } = useIngredients(restaurantId || "")
@@ -24,16 +31,20 @@ export default function IngredientsPage() {
 
     const { mutate: deleteIngredient } = useDeleteIngredient(restaurantId || "")
 
-    const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null) // For View/Edit
-    const [adjustmentIngredient, setAdjustmentIngredient] = useState<Ingredient | null>(null) // For Stock
+    const [selectedIngredient, setSelectedIngredient] = useState<MockIngredient | null>(null)
+    const [adjustmentIngredient, setAdjustmentIngredient] = useState<MockIngredient | null>(null)
     const [isSheetOpen, setIsSheetOpen] = useState(false)
     const [isReadOnly, setIsReadOnly] = useState(false)
 
-    const handleCreate = (values: any) => {
+    const handleCreate = (values: CreateIngredientRequest) => {
         createMutation.mutate(values, {
             onSuccess: () => {
+                toast.success("Ingredient created successfully")
                 setIsSheetOpen(false)
-            }
+            },
+            onError: (error) => {
+                toast.error(error.message || "Failed to create ingredient")
+            },
         })
     }
 
@@ -44,24 +55,24 @@ export default function IngredientsPage() {
         setIsSheetOpen(true)
     }
 
-    const openView = (ingredient: Ingredient) => {
+    const openView = (ingredient: MockIngredient) => {
         setSelectedIngredient(ingredient)
         setIsReadOnly(true)
         setIsSheetOpen(true)
     }
 
-    const openEdit = (ingredient: Ingredient) => {
+    const openEdit = (ingredient: MockIngredient) => {
         setSelectedIngredient(ingredient)
         setIsReadOnly(false)
         setIsSheetOpen(true)
     }
 
     // Handlers for Stock/Delete
-    const openAdjust = (ingredient: Ingredient) => {
+    const openAdjust = (ingredient: MockIngredient) => {
         setAdjustmentIngredient(ingredient)
     }
 
-    const handleDelete = (ingredient: Ingredient) => {
+    const handleDelete = (ingredient: MockIngredient) => {
         if (confirm(`Are you sure you want to delete ${ingredient.name}? This action cannot be undone.`)) {
             deleteIngredient(ingredient.id, {
                 onSuccess: () => toast.success("Ingredient deleted"),
@@ -96,21 +107,26 @@ export default function IngredientsPage() {
                 onDelete={handleDelete}
             />
 
-            {/* View/Edit Sheet */}
+            {/* Create / View / Edit Sheet */}
             <SheetShell
                 open={isSheetOpen}
                 onOpenChange={setIsSheetOpen}
                 title={selectedIngredient ? (isReadOnly ? "View Ingredient" : "Edit Ingredient") : "New Ingredient"}
                 description={selectedIngredient ? (isReadOnly ? "Details of the ingredient" : "Update ingredient details") : "Add a new ingredient to your inventory"}
+                size="lg"
             >
                 {selectedIngredient && isReadOnly ? (
                     <IngredientDetail
                         restaurantId={restaurantId || ""}
                         ingredientId={selectedIngredient.id}
                     />
+                ) : selectedIngredient ? (
+                    /* Edit mode — still mocked, provides a placeholder */
+                    <div className="text-sm text-muted-foreground py-4">
+                        Edit mode is not yet connected to the backend.
+                    </div>
                 ) : (
                     <IngredientForm
-                        defaultValues={selectedIngredient || undefined}
                         onSubmit={handleCreate}
                         isSubmitting={createMutation.isPending}
                     />

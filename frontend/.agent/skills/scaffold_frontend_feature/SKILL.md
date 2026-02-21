@@ -72,28 +72,36 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Loader2 } from "lucide-react"
 
 const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Name must be at least 2 characters.",
-  }),
+  name: z.string().min(2, "Name must be at least 2 characters."),
 })
 
-export function [FeatureName]Form() {
-    const form = useForm<z.infer<typeof formSchema>>({
+type FormValues = z.infer<typeof formSchema>
+
+interface [FeatureName]FormProps {
+  onSubmit: (values: FormValues) => void
+  isSubmitting?: boolean
+}
+
+export function [FeatureName]Form({ onSubmit, isSubmitting }: [FeatureName]FormProps) {
+    const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
-        defaultValues: {
-            name: "",
-        },
+        mode: "onChange", // Required — makes formState.isValid reactive
+        defaultValues: { name: "" },
     })
 
-    function onSubmit(values: z.infer<typeof formSchema>) {
-        console.log(values)
-    }
+    // NOTE: If you use form.setValue() to clear/change a field that affects
+    // other fields' validity, always follow it with form.trigger("affectedField").
+    // See frontend_patterns.md §5.4 for details.
+
+    // NOTE: For monetary inputs, use formatPriceDisplay / parsePriceInput
+    // from @/lib/formatters instead of type="number". See frontend_patterns.md §6.
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <FormField
                     control={form.control}
                     name="name"
@@ -101,13 +109,20 @@ export function [FeatureName]Form() {
                         <FormItem>
                             <FormLabel>Name</FormLabel>
                             <FormControl>
-                                <Input placeholder="shadcn" {...field} />
+                                <Input placeholder="..." {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
                 />
-                <Button type="submit">Submit</Button>
+
+                {/* Always disable when invalid OR submitting */}
+                <div className="flex justify-end">
+                    <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isSubmitting ? "Saving..." : "Save"}
+                    </Button>
+                </div>
             </form>
         </Form>
     )

@@ -99,16 +99,83 @@ export type RestaurantResponse = {
     role: string; // "Owner", "Manager", etc.
 }
 
-export interface Ingredient {
+// ── Mock Ingredient types (used by list, detail, delete, adjust — still mocked) ──
+
+export interface MockIngredient {
     id: string;
     restaurantId: string;
     name: string;
     unit: string; // 'kg', 'g', 'l', 'unit'
     cost: number;
     currentStock: number;
-    // Add other fields as needed
 }
 
-export type CreateIngredientRequest = Omit<Ingredient, 'id' | 'restaurantId' | 'currentStock'>;
-export type UpdateIngredientRequest = Partial<CreateIngredientRequest>;
+export type MockCreateIngredientRequest = Omit<MockIngredient, 'id' | 'restaurantId' | 'currentStock'>;
+export type MockUpdateIngredientRequest = Partial<MockCreateIngredientRequest>;
 
+// ── Units (real, from GET /units) ──
+
+export type UnitType = "MASS" | "VOLUME" | "UNIT";
+
+export interface UnitResponse {
+    id: string;
+    name: string;
+    abbreviation: string;
+    type: UnitType;
+    factorToBase: number;
+    isBase: boolean;
+}
+
+// ── Ingredient Creation (real, matches backend DTOs) ──
+
+export interface MasterIngredientPayload {
+    name: string;
+    baseUnitId: string;
+}
+
+export interface SupplierPayload {
+    id: string | null; // null = quick-add new supplier
+    name?: string;
+    documentTypeId?: string;
+    documentNumber?: string;
+}
+
+export interface SupplierItemPayload {
+    brandName?: string;
+    purchaseUnitName: string;
+    conversionFactor: number;
+    conversionUnitId: string;
+    totalPrice: number;
+}
+
+export interface CreateIngredientRequest {
+    masterIngredient: MasterIngredientPayload;
+    supplier: SupplierPayload;
+    supplierItem: SupplierItemPayload;
+}
+
+export interface SupplierItemInfo {
+    id: string;
+    supplierId: string;
+    brandName: string;
+    purchaseUnitName: string;
+    conversionFactor: number;
+    lastCostBase: number;
+}
+
+export interface IngredientResponse {
+    id: string;
+    name: string;
+    baseUnitId: string;
+    activeSupplierItemId: string;
+    supplierItem: SupplierItemInfo;
+}
+
+// ── Mock Supplier (for supplier selection in form) ──
+
+export interface MockSupplier {
+    id: string;
+    name: string;
+    documentTypeId: string;
+    documentNumber: string;
+}

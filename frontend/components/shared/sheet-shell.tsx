@@ -8,6 +8,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet"
+import { cn } from "@/lib/utils"
 
 interface SheetShellProps {
     title: string
@@ -15,7 +16,15 @@ interface SheetShellProps {
     children: React.ReactNode
     open: boolean
     onOpenChange: (open: boolean) => void
-    size?: "default" | "sm" | "lg" | "xl" | "full" | "content"
+    size?: "default" | "sm" | "lg" | "xl" | "full"
+}
+
+const sizeClasses: Record<string, string> = {
+    sm: "data-[side=right]:sm:!max-w-sm data-[side=left]:sm:!max-w-sm",
+    default: "data-[side=right]:sm:!max-w-md data-[side=left]:sm:!max-w-md",
+    lg: "data-[side=right]:sm:!max-w-lg data-[side=left]:sm:!max-w-lg data-[side=right]:lg:!max-w-xl data-[side=left]:lg:!max-w-xl",
+    xl: "data-[side=right]:sm:!max-w-xl data-[side=left]:sm:!max-w-xl data-[side=right]:lg:!max-w-2xl data-[side=left]:lg:!max-w-2xl",
+    full: "data-[side=right]:sm:!max-w-full data-[side=left]:sm:!max-w-full",
 }
 
 export function SheetShell({
@@ -24,13 +33,16 @@ export function SheetShell({
     children,
     open,
     onOpenChange,
-    size = "default" // "default" in shadcn is usually "sm" (max-w-sm) or "md". Adjust based on sheet.tsx config.
+    size = "default",
 }: SheetShellProps) {
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent
                 side="right"
-                className="w-full sm:max-w-md flex flex-col h-full bg-background p-0 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md"
+                className={cn(
+                    "w-full flex flex-col h-full bg-background p-0 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
+                    sizeClasses[size] ?? sizeClasses.default
+                )}
             >
                 <div className="flex flex-col h-full">
                     <SheetHeader className="px-6 py-4 border-b">
@@ -41,12 +53,6 @@ export function SheetShell({
                             </SheetDescription>
                         )}
                     </SheetHeader>
-                    {/* 
-                        Scrollable content area. 
-                        We use flex-1 to take available space.
-                        Padding is inside to allow scrollbar to be at the edge if needed, 
-                        or we can pad the container. 
-                    */}
                     <div className="flex-1 overflow-y-auto px-6 py-4">
                         {children}
                     </div>
@@ -55,3 +61,4 @@ export function SheetShell({
         </Sheet>
     )
 }
+

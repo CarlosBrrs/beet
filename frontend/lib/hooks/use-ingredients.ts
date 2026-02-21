@@ -1,16 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api-client"
-import { ApiGenericResponse, Ingredient, CreateIngredientRequest, UpdateIngredientRequest } from "@/lib/api-types"
+import {
+    ApiGenericResponse,
+    MockIngredient,
+    MockCreateIngredientRequest,
+    CreateIngredientRequest,
+    IngredientResponse,
+    MockSupplier,
+} from "@/lib/api-types"
 
-const USE_MOCK_DATA = true // Toggle this to false when backend is ready
+const USE_MOCK_DATA = true // Toggle this to false when backend is ready (for list/detail/delete/adjust)
 
-const MOCK_INGREDIENTS: Ingredient[] = [
+const MOCK_INGREDIENTS: MockIngredient[] = [
     { id: "1", restaurantId: "mock", name: "Tomato", unit: "kg", cost: 1.50, currentStock: 20 },
     { id: "2", restaurantId: "mock", name: "Flour", unit: "kg", cost: 0.80, currentStock: 50 },
     { id: "3", restaurantId: "mock", name: "Mozzarella", unit: "kg", cost: 5.00, currentStock: 10 },
     { id: "4", restaurantId: "mock", name: "Basil", unit: "g", cost: 0.05, currentStock: 500 },
     { id: "5", restaurantId: "mock", name: "Olive Oil", unit: "l", cost: 8.00, currentStock: 15 },
-    // --- Added 30 More Ingredients ---
     // Veggies
     { id: "6", restaurantId: "mock", name: "Onion", unit: "kg", cost: 1.20, currentStock: 30 },
     { id: "7", restaurantId: "mock", name: "Garlic", unit: "kg", cost: 5.00, currentStock: 5 },
@@ -46,7 +52,30 @@ const MOCK_INGREDIENTS: Ingredient[] = [
     { id: "35", restaurantId: "mock", name: "Dark Chocolate", unit: "kg", cost: 9.00, currentStock: 8 },
 ]
 
-// Query Keys
+// ── Mock Suppliers (simulates existing suppliers for the form) ──
+// TODO: [SCALABILITY] Evaluate supplier retrieval strategy before going to production.
+// Currently loads ALL suppliers in-memory. If the supplier list grows significantly,
+// consider:
+//   1. Server-side pagination (cursor or offset) with a search/filter endpoint
+//   2. Debounced search-as-you-type with React Query + keepPreviousData
+//   3. Virtualised Select dropdown (e.g. react-select + react-window)
+//   4. Caching strategy: how long to cache, stale-while-revalidate, etc.
+// This is fine for < 200 suppliers, but will degrade beyond that.
+
+const MOCK_SUPPLIERS: MockSupplier[] = [
+    { id: "s1", name: "Molinos del Sur", documentTypeId: "dt-nit", documentNumber: "900-123-456" },
+    { id: "s2", name: "Distribuidora La Central", documentTypeId: "dt-nit", documentNumber: "800-456-789" },
+    { id: "s3", name: "Lácteos El Prado", documentTypeId: "dt-cc", documentNumber: "12345678" },
+    { id: "s4", name: "Carnes Premium S.A.", documentTypeId: "dt-nit", documentNumber: "901-222-333" },
+    { id: "s5", name: "Frutas y Verduras Express", documentTypeId: "dt-cc", documentNumber: "98765432" },
+]
+
+export function useMockSuppliers() {
+    return MOCK_SUPPLIERS
+}
+
+// ── Query Keys ──
+
 export const IngredientsKeys = {
     all: (restaurantId: string) => ["ingredients", restaurantId] as const,
     lists: (restaurantId: string) => [...IngredientsKeys.all(restaurantId), "list"] as const,
@@ -54,22 +83,21 @@ export const IngredientsKeys = {
     detail: (restaurantId: string, id: string) => [...IngredientsKeys.details(restaurantId), id] as const,
 }
 
-// Fetcher Function
-async function fetchIngredients(restaurantId: string): Promise<Ingredient[]> {
+// ── List (mock) ──
+
+async function fetchIngredients(restaurantId: string): Promise<MockIngredient[]> {
     if (USE_MOCK_DATA) {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise(resolve => setTimeout(resolve, 1500))
         return MOCK_INGREDIENTS
     }
 
-    const data = await apiClient<ApiGenericResponse<Ingredient[]>>(
+    const data = await apiClient<ApiGenericResponse<MockIngredient[]>>(
         `/restaurants/${restaurantId}/ingredients`
     )
     if (!data.success) throw new Error(data.errorMessage || "Failed to fetch ingredients")
     return data.data
 }
 
-// Hook
 export function useIngredients(restaurantId: string) {
     return useQuery({
         queryKey: IngredientsKeys.lists(restaurantId),
@@ -78,7 +106,9 @@ export function useIngredients(restaurantId: string) {
     })
 }
 
-async function fetchIngredient(restaurantId: string, ingredientId: string): Promise<Ingredient> {
+// ── Detail (mock) ──
+
+async function fetchIngredient(restaurantId: string, ingredientId: string): Promise<MockIngredient> {
     if (USE_MOCK_DATA) {
         await new Promise(resolve => setTimeout(resolve, 500))
         const item = MOCK_INGREDIENTS.find(i => i.id === ingredientId)
@@ -86,7 +116,7 @@ async function fetchIngredient(restaurantId: string, ingredientId: string): Prom
         return item
     }
 
-    const data = await apiClient<ApiGenericResponse<Ingredient>>(
+    const data = await apiClient<ApiGenericResponse<MockIngredient>>(
         `/restaurants/${restaurantId}/ingredients/${ingredientId}`
     )
     if (!data.success) throw new Error(data.errorMessage || "Failed to fetch ingredient")
@@ -101,27 +131,17 @@ export function useIngredient(restaurantId: string, ingredientId: string) {
     })
 }
 
-// Mutations
-async function createIngredient(restaurantId: string, newItem: CreateIngredientRequest) {
-    if (USE_MOCK_DATA) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const mockItem: Ingredient = {
-            id: Math.random().toString(36).substr(2, 9),
-            restaurantId,
-            currentStock: 0,
-            ...newItem
-        }
-        MOCK_INGREDIENTS.push(mockItem) // Update local mock (dirty but works for demo)
-        return mockItem
-    }
+// ── Create (REAL — calls backend POST /restaurants/{restaurantId}/ingredients) ──
 
-    const data = await apiClient<ApiGenericResponse<Ingredient>>(
+async function createIngredient(restaurantId: string, payload: CreateIngredientRequest): Promise<IngredientResponse> {
+    const data = await apiClient<ApiGenericResponse<IngredientResponse>>(
         `/restaurants/${restaurantId}/ingredients`,
         {
             method: "POST",
-            body: JSON.stringify(newItem),
+            body: JSON.stringify(payload),
         }
     )
+    if (!data.success) throw new Error(data.errorMessage || "Failed to create ingredient")
     return data.data
 }
 
@@ -129,12 +149,14 @@ export function useCreateIngredient(restaurantId: string) {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: (newItem: CreateIngredientRequest) => createIngredient(restaurantId, newItem),
+        mutationFn: (payload: CreateIngredientRequest) => createIngredient(restaurantId, payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists(restaurantId) })
         },
     })
 }
+
+// ── Stock Adjustment (mock) ──
 
 export interface StockAdjustmentRequest {
     mode: "DELTA" | "ABSOLUTE"
@@ -172,6 +194,8 @@ export function useAdjustStock(restaurantId: string) {
         },
     })
 }
+
+// ── Delete (mock) ──
 
 async function deleteIngredient(restaurantId: string, ingredientId: string) {
     if (USE_MOCK_DATA) {
