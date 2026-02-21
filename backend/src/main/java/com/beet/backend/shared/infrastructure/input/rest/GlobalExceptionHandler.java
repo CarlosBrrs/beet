@@ -3,6 +3,7 @@ package com.beet.backend.shared.infrastructure.input.rest;
 import com.beet.backend.shared.domain.exception.ResourceAlreadyExistsException;
 import com.beet.backend.shared.domain.exception.ResourceNotFoundException;
 import com.beet.backend.shared.domain.exception.ResourceLimitExceededException;
+import com.beet.backend.modules.ingredient.domain.exception.UnitTypeMismatchException;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -55,6 +56,12 @@ public class GlobalExceptionHandler {
     public ApiGenericResponse<Void> handleResourceLimitExceeded(ResourceLimitExceededException ex) {
         String message = String.format("%s: %s", ex.getClass().getSimpleName(), ex.getMessage());
         return ApiGenericResponse.error(message);
+    }
+
+    @ExceptionHandler(UnitTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiGenericResponse<Void> handleUnitTypeMismatch(UnitTypeMismatchException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)
