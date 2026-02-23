@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { MockIngredient } from "@/lib/api-types"
+import { IngredientListResponse } from "@/lib/api-types"
 import { useAdjustStock } from "@/lib/hooks/use-ingredients"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
@@ -33,7 +33,7 @@ const absoluteSchema = z.object({
 })
 
 interface StockAdjustmentFormProps {
-    ingredient: MockIngredient
+    ingredient: IngredientListResponse
     onSuccess: () => void
 }
 
@@ -41,7 +41,9 @@ export function StockAdjustmentForm({ ingredient, onSuccess }: StockAdjustmentFo
     const [mode, setMode] = useState<"DELTA" | "ABSOLUTE">("DELTA")
     const [deltaType, setDeltaType] = useState<"add" | "remove">("add")
 
-    const { mutate: adjustStock, isPending } = useAdjustStock(ingredient.restaurantId)
+    // The component below is mocking the adjustStock API call still, so restaurantId isn't really used by the mock
+    // In the future this should come from context or props. Hardcoding for now to satisfy hook signature.
+    const { mutate: adjustStock, isPending } = useAdjustStock()
 
     const deltaForm = useForm<z.infer<typeof deltaSchema>>({
         resolver: zodResolver(deltaSchema),
@@ -67,7 +69,7 @@ export function StockAdjustmentForm({ ingredient, onSuccess }: StockAdjustmentFo
             },
             {
                 onSuccess: () => {
-                    toast.success(`Stock adjusted by ${finalQuantity} ${ingredient.unit}`)
+                    toast.success(`Stock adjusted by ${finalQuantity} ${ingredient.unitAbbreviation}`)
                     onSuccess()
                     deltaForm.reset()
                 },
@@ -88,7 +90,7 @@ export function StockAdjustmentForm({ ingredient, onSuccess }: StockAdjustmentFo
             },
             {
                 onSuccess: () => {
-                    toast.success("Stock updated successfully")
+                    toast.success(`Stock set to ${values.quantity} ${ingredient.unitAbbreviation}`)
                     onSuccess()
                     absoluteForm.reset()
                 },
@@ -97,10 +99,14 @@ export function StockAdjustmentForm({ ingredient, onSuccess }: StockAdjustmentFo
         )
     }
 
+    const currentStock = 0; // TODO: V4 backend migration will supply this
+    const deltaQuantityValue = deltaForm.watch("quantity") || 0;
+    const calculatedDeltaStock = deltaType === "add" ? currentStock + deltaQuantityValue : currentStock - deltaQuantityValue;
+
     return (
         <div className="space-y-4">
             <div className="text-sm text-muted-foreground">
-                Current Stock: <span className="font-bold text-foreground">{ingredient.currentStock} {ingredient.unit}</span>
+                Current Stock: <span className="font-bold text-foreground">{currentStock} {ingredient.unitAbbreviation}</span>
             </div>
 
             <Tabs defaultValue="delta" onValueChange={(v: string) => setMode(v === "delta" ? "DELTA" : "ABSOLUTE")}>
@@ -137,10 +143,27 @@ export function StockAdjustmentForm({ ingredient, onSuccess }: StockAdjustmentFo
                                 name="quantity"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Quantity ({ingredient.unit})</FormLabel>
+                                        <FormLabel>Quantity ({ingredient.unitAbbreviation})</FormLabel>
                                         <FormControl>
                                             <Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value))} />
                                         </FormControl>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <span className="text-xl font-bold bg-muted px-3 py-1 rounded">
+                                                {currentStock} {ingredient.unitAbbreviation}
+                                            </span>
+                                            <span className="text-sm font-medium text-muted-foreground w-8 text-center text-primary" >
+                                                {deltaType === "add" ? "+" : "-"}
+                                            </span>
+                                            <span className="text-xl font-bold bg-primary/10 px-3 py-1 rounded text-primary">
+                                                {field.value || 0} {ingredient.unitAbbreviation}
+                                            </span>
+                                            <span className="text-sm font-medium text-muted-foreground w-8 text-center">
+                                                =
+                                            </span>
+                                            <span className="text-xl font-bold bg-muted px-3 py-1 rounded">
+                                                {calculatedDeltaStock} {ingredient.unitAbbreviation}
+                                            </span>
+                                        </div>
                                         <FormMessage />
                                     </FormItem>
                                 )}
@@ -177,7 +200,7 @@ export function StockAdjustmentForm({ ingredient, onSuccess }: StockAdjustmentFo
                                 name="quantity"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>New Total Stock ({ingredient.unit})</FormLabel>
+                                        <FormLabel>New Total Stock ({ingredient.unitAbbreviation})</FormLabel>
                                         <FormControl>
                                             <Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value))} />
                                         </FormControl>

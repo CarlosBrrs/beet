@@ -1,39 +1,47 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { MockIngredient } from "@/lib/api-types"
+import { IngredientListResponse, MockIngredient } from "@/lib/api-types"
 import { DataTable } from "@/components/shared/data-table/data-table"
 import { Button } from "@/components/ui/button"
 import { Can } from "@/components/shared/can"
 import { PermissionModule, PermissionAction } from "@/lib/permissions"
 import { Pencil, Trash2, Eye, BarChart2 } from "lucide-react"
+import { useState } from "react"
 import { DataTableColumnHeader } from "@/components/shared/data-table/data-table-column-header"
 import { formatCurrency } from "@/lib/utils"
+import { useIngredients } from "@/lib/hooks/use-ingredients"
+import { useRestaurantContext } from "@/components/providers/restaurant-provider"
+import { useDebounce } from "@/lib/hooks/use-debounce"
+import { PaginationState, SortingState, ColumnFiltersState } from "@tanstack/react-table"
 
 // Columns Definition
 const createColumns = (
-    onView: (ingredient: MockIngredient) => void,
-    onEdit: (ingredient: MockIngredient) => void,
-    onAdjust: (ingredient: MockIngredient) => void,
-    onDelete: (ingredient: MockIngredient) => void
-): ColumnDef<MockIngredient>[] => [
+    onView: (ingredient: IngredientListResponse) => void,
+    onEdit: (ingredient: IngredientListResponse) => void,
+    onAdjust: (ingredient: IngredientListResponse) => void,
+    onDelete: (ingredient: IngredientListResponse) => void
+): ColumnDef<IngredientListResponse>[] => [
         {
             accessorKey: "name",
             header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
         },
         {
-            accessorKey: "unit",
+            accessorKey: "unitAbbreviation",
             header: ({ column }) => <DataTableColumnHeader column={column} title="Unit" />,
         },
         {
-            accessorKey: "cost",
+            accessorKey: "costPerBaseUnit",
             header: ({ column }) => <DataTableColumnHeader column={column} title="Cost" />,
-            cell: ({ row }) => formatCurrency(parseFloat(row.getValue("cost"))),
+            cell: ({ row }) => {
+                const val = row.getValue("costPerBaseUnit")
+                return val ? formatCurrency(parseFloat(val as string)) : "-"
+            },
         },
-        {
-            accessorKey: "currentStock",
-            header: ({ column }) => <DataTableColumnHeader column={column} title="Stock" />,
-        },
+        // {
+        //     accessorKey: "currentStock",
+        //     header: ({ column }) => <DataTableColumnHeader column={column} title="Stock" />,
+        // },
         {
             id: "actions",
             cell: ({ row }) => {
@@ -65,29 +73,58 @@ const createColumns = (
     ]
 
 interface IngredientListProps {
-    ingredients: MockIngredient[]
-    isLoading: boolean
-    onView: (ingredient: MockIngredient) => void
-    onEdit: (ingredient: MockIngredient) => void
-    onAdjust: (ingredient: MockIngredient) => void
-    onDelete: (ingredient: MockIngredient) => void
+    onView: (ingredient: IngredientListResponse) => void
+    onEdit: (ingredient: IngredientListResponse) => void
+    onAdjust: (ingredient: IngredientListResponse) => void
+    onDelete: (ingredient: IngredientListResponse) => void
 }
 
-export function IngredientList({ ingredients, isLoading, onView, onEdit, onAdjust, onDelete }: IngredientListProps) {
+export function IngredientList({ onView, onEdit, onAdjust, onDelete }: IngredientListProps) {
+    const { restaurantId } = useRestaurantContext()
+
+    // Controlled Server-Side States
+    const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })
+    const [sorting, setSorting] = useState<SortingState>([])
+    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+    const [globalFilter, setGlobalFilter] = useState("")
+
+    // Debounce the search input by 500ms
+    const debouncedSearch = useDebounce(globalFilter, 500)
+
+    // Parse TanStack Table state into backend API expected params
+    const sortBy = sorting.length > 0 ? sorting[0].id : undefined
+    const sortDesc = sorting.length > 0 ? sorting[0].desc : undefined
+
+    const unitFilter = columnFilters.find(f => f.id === "unitAbbreviation")
+    const units = unitFilter ? (unitFilter.value as string[]) : undefined
+
+    // Fetch paginated simulated data
+    const { data: pageResult, isLoading } = useIngredients({
+        page: pagination.pageIndex,
+        size: pagination.pageSize,
+        search: debouncedSearch,
+        sortBy,
+        sortDesc,
+        units
+    })
+
+    const ingredients = pageResult?.content || []
+    const pageCount = pageResult?.totalPages || -1
+
     const columns = createColumns(onView, onEdit, onAdjust, onDelete)
 
-    if (isLoading) return <div>Loading ingredients...</div>
+    if (isLoading && ingredients.length === 0) return <div>Loading ingredients...</div>
 
     const facets = [
         {
-            column: "unit",
+            column: "unitAbbreviation",
             title: "Unit",
             options: [
                 { label: "Kilogram (kg)", value: "kg" },
                 { label: "Gram (g)", value: "g" },
                 { label: "Liter (l)", value: "l" },
                 { label: "Milliliter (ml)", value: "ml" },
-                { label: "Unit (pcs)", value: "unit" },
+                { label: "Piece (pcs)", value: "pcs" },
             ],
         },
     ]
@@ -97,6 +134,15 @@ export function IngredientList({ ingredients, isLoading, onView, onEdit, onAdjus
             columns={columns}
             data={ingredients}
             facets={facets}
+            pageCount={pageCount}
+            pagination={pagination}
+            onPaginationChange={setPagination}
+            sorting={sorting}
+            onSortingChange={setSorting}
+            columnFilters={columnFilters}
+            onColumnFiltersChange={setColumnFilters}
+            globalFilter={globalFilter}
+            onGlobalFilterChange={setGlobalFilter}
         />
     )
 }

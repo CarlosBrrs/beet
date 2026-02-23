@@ -5,6 +5,35 @@ export interface ApiGenericResponse<T> {
     errorMessage?: string;
 }
 
+export interface PageResponse<T> {
+    content: T[];
+    pageable: {
+        pageNumber: number;
+        pageSize: number;
+        sort: {
+            empty: boolean;
+            sorted: boolean;
+            unsorted: boolean;
+        };
+        offset: number;
+        paged: boolean;
+        unpaged: boolean;
+    };
+    last: boolean;
+    totalElements: number;
+    totalPages: number;
+    first: boolean;
+    size: number;
+    number: number;
+    sort: {
+        empty: boolean;
+        sorted: boolean;
+        unsorted: boolean;
+    };
+    numberOfElements: number;
+    empty: boolean;
+}
+
 export interface SubscriptionPlanFeatures {
     max_restaurants: number;
     max_employees: number;
@@ -128,6 +157,12 @@ export interface UnitResponse {
 
 // ── Ingredient Creation (real, matches backend DTOs) ──
 
+export interface DocumentTypeResponse {
+    id: string;
+    name: string;
+    description: string | null;
+}
+
 export interface MasterIngredientPayload {
     name: string;
     baseUnitId: string;
@@ -169,6 +204,35 @@ export interface IngredientResponse {
     baseUnitId: string;
     activeSupplierItemId: string;
     supplierItem: SupplierItemInfo;
+}
+
+// ── Ingredient Read Endpoints (Real) ──
+
+export interface IngredientListResponse {
+    id: string;
+    name: string;
+    unitAbbreviation: string;
+    costPerBaseUnit: number | null;
+}
+
+export interface ActiveSupplierInfo {
+    supplierId: string;
+    supplierName: string;
+    supplierItemId: string;
+    brandName: string;
+    purchaseUnitName: string;
+    conversionFactor: number;
+    lastCostBase: number;
+}
+
+export interface IngredientDetailResponse {
+    id: string;
+    name: string;
+    baseUnitId: string;
+    unitName: string;
+    unitAbbreviation: string;
+    costPerBaseUnit: number | null;
+    activeSupplier: ActiveSupplierInfo | null;
 }
 
 // ── Mock Supplier (for supplier selection in form) ──

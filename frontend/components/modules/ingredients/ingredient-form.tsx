@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { CreateIngredientRequest } from "@/lib/api-types"
 import { useUnits } from "@/lib/hooks/use-units"
+import { useDocumentTypes } from "@/lib/hooks/use-document-types"
 import { useMockSuppliers } from "@/lib/hooks/use-ingredients"
 import { Loader2, Plus, Search, HelpCircle, X } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
@@ -70,16 +71,6 @@ const formSchema = z.object({
 })
 
 type FormValues = z.infer<typeof formSchema>
-
-// ── Mock Document Types ──
-
-const MOCK_DOCUMENT_TYPES = [
-    { id: "dt-nit", name: "NIT" },
-    { id: "dt-cc", name: "CC" },
-    { id: "dt-ce", name: "CE" },
-    { id: "dt-rfc", name: "RFC" },
-]
-
 
 // ── Help Guide Component ──
 
@@ -169,6 +160,7 @@ interface IngredientFormProps {
 
 export function IngredientForm({ onSubmit, isSubmitting }: IngredientFormProps) {
     const { data: units, isLoading: unitsLoading } = useUnits()
+    const { data: documentTypes, isLoading: docTypesLoading } = useDocumentTypes("CO")
     const mockSuppliers = useMockSuppliers()
     const [showHelp, setShowHelp] = useState(false)
     const [priceDisplay, setPriceDisplay] = useState("")
@@ -182,7 +174,7 @@ export function IngredientForm({ onSubmit, isSubmitting }: IngredientFormProps) 
             supplierMode: "new",
             existingSupplierId: "",
             supplierName: "",
-            documentTypeId: MOCK_DOCUMENT_TYPES[0].id,
+            documentTypeId: "",
             documentNumber: "",
             purchaseUnitName: "",
             conversionFactor: 0,
@@ -276,11 +268,11 @@ export function IngredientForm({ onSubmit, isSubmitting }: IngredientFormProps) 
         onSubmit(payload)
     }
 
-    if (unitsLoading) {
+    if (unitsLoading || docTypesLoading) {
         return (
             <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                <span className="ml-2 text-muted-foreground">Loading units...</span>
+                <span className="ml-2 text-muted-foreground">Loading form data...</span>
             </div>
         )
     }
@@ -426,9 +418,9 @@ export function IngredientForm({ onSubmit, isSubmitting }: IngredientFormProps) 
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    {MOCK_DOCUMENT_TYPES.map(dt => (
+                                                    {documentTypes?.map(dt => (
                                                         <SelectItem key={dt.id} value={dt.id}>
-                                                            {dt.name}
+                                                            {dt.name} {dt.description ? `(${dt.description})` : ''}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>

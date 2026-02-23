@@ -14,6 +14,7 @@ import {
     getPaginationRowModel,
     getSortedRowModel,
     useReactTable,
+    PaginationState,
 } from "@tanstack/react-table"
 
 import {
@@ -41,36 +42,70 @@ interface DataTableProps<TData, TValue> {
             icon?: React.ComponentType<{ className?: string }>
         }[]
     }[]
+    pageCount?: number
+    pagination?: PaginationState
+    onPaginationChange?: React.Dispatch<React.SetStateAction<PaginationState>>
+    sorting?: SortingState
+    onSortingChange?: React.Dispatch<React.SetStateAction<SortingState>>
+    columnFilters?: ColumnFiltersState
+    onColumnFiltersChange?: React.Dispatch<React.SetStateAction<ColumnFiltersState>>
+    globalFilter?: string
+    onGlobalFilterChange?: React.Dispatch<React.SetStateAction<string>>
 }
 
 export function DataTable<TData, TValue>({
     columns,
     data,
     filterColumn,
-    facets
+    facets,
+    pageCount,
+    pagination,
+    onPaginationChange,
+    sorting: controlledSorting,
+    onSortingChange: controlledOnSortingChange,
+    columnFilters: controlledColumnFilters,
+    onColumnFiltersChange: controlledOnColumnFiltersChange,
+    globalFilter: controlledGlobalFilter,
+    onGlobalFilterChange: controlledOnGlobalFilterChange,
 }: DataTableProps<TData, TValue>) {
+    const isManual = pageCount !== undefined
+
     const [rowSelection, setRowSelection] = React.useState({})
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
-    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-    const [sorting, setSorting] = React.useState<SortingState>([])
-    const [globalFilter, setGlobalFilter] = React.useState("")
+
+    const [internalColumnFilters, setInternalColumnFilters] = React.useState<ColumnFiltersState>([])
+    const [internalSorting, setInternalSorting] = React.useState<SortingState>([])
+    const [internalGlobalFilter, setInternalGlobalFilter] = React.useState("")
+
+    const columnFilters = controlledColumnFilters ?? internalColumnFilters
+    const setColumnFilters = controlledOnColumnFiltersChange ?? setInternalColumnFilters
+    const sorting = controlledSorting ?? internalSorting
+    const setSorting = controlledOnSortingChange ?? setInternalSorting
+    const globalFilter = (controlledGlobalFilter !== undefined) ? controlledGlobalFilter : internalGlobalFilter
+    const setGlobalFilter = controlledOnGlobalFilterChange ?? setInternalGlobalFilter
 
     const table = useReactTable({
         data,
         columns,
+        pageCount,
         state: {
             sorting,
             columnVisibility,
             rowSelection,
             columnFilters,
             globalFilter,
+            ...(pagination ? { pagination } : {})
         },
+        manualPagination: isManual,
+        manualSorting: isManual,
+        manualFiltering: isManual,
         enableRowSelection: true,
         onRowSelectionChange: setRowSelection,
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: setColumnVisibility,
         onGlobalFilterChange: setGlobalFilter,
+        ...(onPaginationChange ? { onPaginationChange } : {}),
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
         getPaginationRowModel: getPaginationRowModel(),

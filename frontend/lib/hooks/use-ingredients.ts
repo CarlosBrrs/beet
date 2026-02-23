@@ -1,15 +1,24 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api-client"
 import {
     ApiGenericResponse,
+    PageResponse,
     MockIngredient,
-    MockCreateIngredientRequest,
     CreateIngredientRequest,
     IngredientResponse,
     MockSupplier,
+    IngredientListResponse,
+    IngredientDetailResponse
 } from "@/lib/api-types"
 
-const USE_MOCK_DATA = true // Toggle this to false when backend is ready (for list/detail/delete/adjust)
+export interface IngredientListParams {
+    page: number
+    size: number
+    search?: string
+    sortBy?: string
+    sortDesc?: boolean
+    units?: string[]
+}
 
 const MOCK_INGREDIENTS: MockIngredient[] = [
     { id: "1", restaurantId: "mock", name: "Tomato", unit: "kg", cost: 1.50, currentStock: 20 },
@@ -77,65 +86,73 @@ export function useMockSuppliers() {
 // ── Query Keys ──
 
 export const IngredientsKeys = {
-    all: (restaurantId: string) => ["ingredients", restaurantId] as const,
-    lists: (restaurantId: string) => [...IngredientsKeys.all(restaurantId), "list"] as const,
-    details: (restaurantId: string) => [...IngredientsKeys.all(restaurantId), "detail"] as const,
-    detail: (restaurantId: string, id: string) => [...IngredientsKeys.details(restaurantId), id] as const,
+    all: () => ["ingredients"] as const,
+    lists: () => [...IngredientsKeys.all(), "list"] as const,
+    list: (params: IngredientListParams) => [...IngredientsKeys.lists(), params] as const,
+    details: () => [...IngredientsKeys.all(), "detail"] as const,
+    detail: (id: string) => [...IngredientsKeys.details(), id] as const,
 }
 
-// ── List (mock) ──
+// ── List (Server-Side Pagination) ──
 
-async function fetchIngredients(restaurantId: string): Promise<MockIngredient[]> {
-    if (USE_MOCK_DATA) {
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        return MOCK_INGREDIENTS
+async function fetchIngredients(params: IngredientListParams): Promise<PageResponse<IngredientListResponse>> {
+    const searchParams = new URLSearchParams()
+    searchParams.append("page", params.page.toString())
+    searchParams.append("size", params.size.toString())
+    if (params.search) searchParams.append("search", params.search)
+    if (params.sortBy) searchParams.append("sortBy", params.sortBy)
+    if (params.sortDesc) searchParams.append("sortDesc", params.sortDesc.toString())
+    if (params.units) {
+        params.units.forEach(unit => searchParams.append("unit", unit))
     }
 
-    const data = await apiClient<ApiGenericResponse<MockIngredient[]>>(
-        `/restaurants/${restaurantId}/ingredients`
+    const data = await apiClient<ApiGenericResponse<PageResponse<IngredientListResponse>>>(
+        `/ingredients?${searchParams.toString()}`
     )
     if (!data.success) throw new Error(data.errorMessage || "Failed to fetch ingredients")
     return data.data
 }
 
-export function useIngredients(restaurantId: string) {
+export function useIngredients(params: IngredientListParams) {
     return useQuery({
-        queryKey: IngredientsKeys.lists(restaurantId),
-        queryFn: () => fetchIngredients(restaurantId),
-        enabled: !!restaurantId,
+        queryKey: IngredientsKeys.list(params),
+        queryFn: () => fetchIngredients(params),
+        placeholderData: keepPreviousData,
     })
 }
 
 // ── Detail (mock) ──
+// TODO: Connect this to real backend endpoint /ingredients/{id} when ready
+async function fetchIngredient(ingredientId: string): Promise<IngredientDetailResponse> {
+    await new Promise(resolve => setTimeout(resolve, 500))
+    const item = MOCK_INGREDIENTS.find(i => i.id === ingredientId)
+    if (!item) throw new Error("Ingredient not found")
 
-async function fetchIngredient(restaurantId: string, ingredientId: string): Promise<MockIngredient> {
-    if (USE_MOCK_DATA) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const item = MOCK_INGREDIENTS.find(i => i.id === ingredientId)
-        if (!item) throw new Error("Ingredient not found")
-        return item
+    // Convert MockIngredient to IngredientDetailResponse
+    return {
+        id: item.id,
+        name: item.name,
+        baseUnitId: "mock-unit-id",
+        unitName: item.unit === 'kg' ? 'Kilogram' : item.unit,
+        unitAbbreviation: item.unit,
+        costPerBaseUnit: item.cost,
+        activeSupplier: null
     }
-
-    const data = await apiClient<ApiGenericResponse<MockIngredient>>(
-        `/restaurants/${restaurantId}/ingredients/${ingredientId}`
-    )
-    if (!data.success) throw new Error(data.errorMessage || "Failed to fetch ingredient")
-    return data.data
 }
 
-export function useIngredient(restaurantId: string, ingredientId: string) {
+export function useIngredient(ingredientId: string) {
     return useQuery({
-        queryKey: IngredientsKeys.detail(restaurantId, ingredientId),
-        queryFn: () => fetchIngredient(restaurantId, ingredientId),
-        enabled: !!restaurantId && !!ingredientId,
+        queryKey: IngredientsKeys.detail(ingredientId),
+        queryFn: () => fetchIngredient(ingredientId),
+        enabled: !!ingredientId,
     })
 }
 
-// ── Create (REAL — calls backend POST /restaurants/{restaurantId}/ingredients) ──
+// ── Create (REAL — calls backend POST /ingredients) ──
 
-async function createIngredient(restaurantId: string, payload: CreateIngredientRequest): Promise<IngredientResponse> {
+async function createIngredient(payload: CreateIngredientRequest): Promise<IngredientResponse> {
     const data = await apiClient<ApiGenericResponse<IngredientResponse>>(
-        `/restaurants/${restaurantId}/ingredients`,
+        "/ingredients",
         {
             method: "POST",
             body: JSON.stringify(payload),
@@ -145,13 +162,13 @@ async function createIngredient(restaurantId: string, payload: CreateIngredientR
     return data.data
 }
 
-export function useCreateIngredient(restaurantId: string) {
+export function useCreateIngredient() {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: (payload: CreateIngredientRequest) => createIngredient(restaurantId, payload),
+        mutationFn: (payload: CreateIngredientRequest) => createIngredient(payload),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists(restaurantId) })
+            queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists() })
         },
     })
 }
@@ -164,58 +181,51 @@ export interface StockAdjustmentRequest {
     reason: string
 }
 
-async function adjustStock(restaurantId: string, ingredientId: string, adjustment: StockAdjustmentRequest) {
-    if (USE_MOCK_DATA) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const item = MOCK_INGREDIENTS.find(i => i.id === ingredientId)
-        if (!item) throw new Error("Ingredient not found")
+async function adjustStock(ingredientId: string, adjustment: StockAdjustmentRequest) {
+    // 🚧 STILL MOCKED until backend implements it 🚧
+    await new Promise(resolve => setTimeout(resolve, 500))
+    const item = MOCK_INGREDIENTS.find(i => i.id === ingredientId)
+    if (!item) throw new Error("Ingredient not found")
 
-        if (adjustment.mode === "DELTA") {
-            item.currentStock += adjustment.quantity
-        } else {
-            item.currentStock = adjustment.quantity
-        }
-        return item
+    if (adjustment.mode === "DELTA") {
+        item.currentStock += adjustment.quantity
+    } else {
+        item.currentStock = adjustment.quantity
     }
-
-    // Backend implementation pending
-    // const data = await apiClient(...)
-    // return data.data
+    return item
 }
 
-export function useAdjustStock(restaurantId: string) {
+export function useAdjustStock() {
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: ({ ingredientId, adjustment }: { ingredientId: string; adjustment: StockAdjustmentRequest }) =>
-            adjustStock(restaurantId, ingredientId, adjustment),
+            adjustStock(ingredientId, adjustment),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists(restaurantId) })
+            queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists() })
         },
     })
 }
 
 // ── Delete (mock) ──
 
-async function deleteIngredient(restaurantId: string, ingredientId: string) {
-    if (USE_MOCK_DATA) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const index = MOCK_INGREDIENTS.findIndex(i => i.id === ingredientId)
-        if (index !== -1) {
-            MOCK_INGREDIENTS.splice(index, 1)
-        }
-        return true
+async function deleteIngredient(ingredientId: string) {
+    // 🚧 STILL MOCKED until backend implements it 🚧
+    await new Promise(resolve => setTimeout(resolve, 500))
+    const index = MOCK_INGREDIENTS.findIndex(i => i.id === ingredientId)
+    if (index !== -1) {
+        MOCK_INGREDIENTS.splice(index, 1)
     }
-    // Backend implementation pending
+    return true
 }
 
-export function useDeleteIngredient(restaurantId: string) {
+export function useDeleteIngredient() {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: (ingredientId: string) => deleteIngredient(restaurantId, ingredientId),
+        mutationFn: (ingredientId: string) => deleteIngredient(ingredientId),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists(restaurantId) })
+            queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists() })
         },
     })
 }

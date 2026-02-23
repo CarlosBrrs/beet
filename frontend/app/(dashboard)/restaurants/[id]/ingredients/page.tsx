@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRestaurantContext } from "@/components/providers/restaurant-provider"
 import { useIngredients, useCreateIngredient } from "@/lib/hooks/use-ingredients"
-import { MockIngredient, CreateIngredientRequest } from "@/lib/api-types"
+import { IngredientListResponse, CreateIngredientRequest } from "@/lib/api-types"
 import { IngredientList } from "@/components/modules/ingredients/ingredient-list"
 import { SheetShell } from "@/components/shared/sheet-shell"
 import { IngredientForm } from "@/components/modules/ingredients/ingredient-form"
@@ -26,13 +26,12 @@ import { toast } from "sonner"
 
 export default function IngredientsPage() {
     const { restaurantId } = useRestaurantContext()
-    const { data: ingredients, isLoading, isError } = useIngredients(restaurantId || "")
-    const createMutation = useCreateIngredient(restaurantId || "")
+    const createMutation = useCreateIngredient()
 
-    const { mutate: deleteIngredient } = useDeleteIngredient(restaurantId || "")
+    const { mutate: deleteIngredient } = useDeleteIngredient()
 
-    const [selectedIngredient, setSelectedIngredient] = useState<MockIngredient | null>(null)
-    const [adjustmentIngredient, setAdjustmentIngredient] = useState<MockIngredient | null>(null)
+    const [selectedIngredient, setSelectedIngredient] = useState<IngredientListResponse | null>(null)
+    const [adjustmentIngredient, setAdjustmentIngredient] = useState<IngredientListResponse | null>(null)
     const [isSheetOpen, setIsSheetOpen] = useState(false)
     const [isReadOnly, setIsReadOnly] = useState(false)
 
@@ -55,24 +54,24 @@ export default function IngredientsPage() {
         setIsSheetOpen(true)
     }
 
-    const openView = (ingredient: MockIngredient) => {
+    const handleView = (ingredient: IngredientListResponse) => {
         setSelectedIngredient(ingredient)
         setIsReadOnly(true)
         setIsSheetOpen(true)
     }
 
-    const openEdit = (ingredient: MockIngredient) => {
+    const handleEdit = (ingredient: IngredientListResponse) => {
         setSelectedIngredient(ingredient)
         setIsReadOnly(false)
         setIsSheetOpen(true)
     }
 
-    // Handlers for Stock/Delete
-    const openAdjust = (ingredient: MockIngredient) => {
+    // Handlers for Stock Adjustment Modal
+    const handleAdjust = (ingredient: IngredientListResponse) => {
         setAdjustmentIngredient(ingredient)
     }
 
-    const handleDelete = (ingredient: MockIngredient) => {
+    const handleDelete = (ingredient: IngredientListResponse) => {
         if (confirm(`Are you sure you want to delete ${ingredient.name}? This action cannot be undone.`)) {
             deleteIngredient(ingredient.id, {
                 onSuccess: () => toast.success("Ingredient deleted"),
@@ -80,8 +79,6 @@ export default function IngredientsPage() {
             })
         }
     }
-
-    if (isError) return <div>Error loading ingredients</div>
 
     return (
         <div className="space-y-4 pb-6">
@@ -99,11 +96,9 @@ export default function IngredientsPage() {
             </div>
 
             <IngredientList
-                ingredients={ingredients || []}
-                isLoading={isLoading}
-                onView={openView}
-                onEdit={openEdit}
-                onAdjust={openAdjust}
+                onView={handleView}
+                onEdit={handleEdit}
+                onAdjust={handleAdjust}
                 onDelete={handleDelete}
             />
 

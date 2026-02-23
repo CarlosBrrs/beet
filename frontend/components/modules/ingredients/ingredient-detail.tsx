@@ -10,7 +10,7 @@ interface IngredientDetailProps {
 }
 
 export function IngredientDetail({ restaurantId, ingredientId }: IngredientDetailProps) {
-    const { data: ingredient, isLoading, isError } = useIngredient(restaurantId, ingredientId)
+    const { data: ingredient, isLoading, isError } = useIngredient(ingredientId)
 
     if (isLoading) {
         return (
@@ -36,7 +36,8 @@ export function IngredientDetail({ restaurantId, ingredientId }: IngredientDetai
                 <div>
                     <h4 className="text-sm font-medium text-muted-foreground">Current Stock</h4>
                     <p className="text-lg">
-                        {ingredient.currentStock} <span className="text-sm text-muted-foreground">{ingredient.unit}</span>
+                        {/* Waiting on backend V4 migration for currentStock */}
+                        - <span className="text-sm text-muted-foreground">{ingredient.unitAbbreviation}</span>
                     </p>
                 </div>
             </div>
@@ -44,11 +45,11 @@ export function IngredientDetail({ restaurantId, ingredientId }: IngredientDetai
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <h4 className="text-sm font-medium text-muted-foreground">Unit</h4>
-                    <p>{ingredient.unit}</p>
+                    <p>{ingredient.unitName} ({ingredient.unitAbbreviation})</p>
                 </div>
                 <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Cost per Unit</h4>
-                    <p>{formatCurrency(ingredient.cost)}</p>
+                    <h4 className="text-sm font-medium text-muted-foreground">Cost per Base Unit</h4>
+                    <p>{ingredient.costPerBaseUnit ? formatCurrency(ingredient.costPerBaseUnit) : "-"}</p>
                 </div>
             </div>
 
@@ -56,7 +57,7 @@ export function IngredientDetail({ restaurantId, ingredientId }: IngredientDetai
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">System Info</h4>
                 <div className="text-xs text-muted-foreground space-y-1">
                     <p>ID: {ingredient.id}</p>
-                    <p>Restaurant ID: {ingredient.restaurantId}</p>
+                    <p>Base Unit ID: {ingredient.baseUnitId}</p>
                 </div>
             </div>
         </div>
