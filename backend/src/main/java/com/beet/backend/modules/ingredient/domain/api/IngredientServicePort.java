@@ -1,10 +1,15 @@
 package com.beet.backend.modules.ingredient.domain.api;
 
+import com.beet.backend.modules.ingredient.application.dto.IngredientDetailResponse;
+import com.beet.backend.modules.ingredient.application.dto.IngredientListResponse;
 import com.beet.backend.modules.ingredient.domain.model.MasterIngredientDomain;
 import com.beet.backend.modules.ingredient.domain.model.SupplierItemDomain;
 import com.beet.backend.modules.supplier.domain.model.SupplierDomain;
+import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -35,4 +40,18 @@ public interface IngredientServicePort {
             BigDecimal userConversionFactor,
             BigDecimal totalPrice,
             UUID ownerId);
+
+    /**
+     * Lists ingredients for the given owner with server-side pagination, search,
+     * sorting and unit facets.
+     */
+    PageResponse<IngredientListResponse> list(
+            UUID ownerId, int page, int size,
+            String search, String sortBy, boolean sortDesc, List<String> units);
+
+    /**
+     * Returns the enriched detail of a single ingredient.
+     * Returns empty if not found or the owner does not own it.
+     */
+    Optional<IngredientDetailResponse> findById(UUID id, UUID ownerId);
 }

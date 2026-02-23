@@ -3,6 +3,7 @@ package com.beet.backend.shared.infrastructure.input.rest;
 import com.beet.backend.shared.domain.exception.ResourceAlreadyExistsException;
 import com.beet.backend.shared.domain.exception.ResourceNotFoundException;
 import com.beet.backend.shared.domain.exception.ResourceLimitExceededException;
+import com.beet.backend.modules.documenttype.domain.exception.InvalidDocumentTypeSearchException;
 import com.beet.backend.modules.ingredient.domain.exception.UnitTypeMismatchException;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -61,6 +62,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnitTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiGenericResponse<Void> handleUnitTypeMismatch(UnitTypeMismatchException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidDocumentTypeSearchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiGenericResponse<Void> handleInvalidDocumentTypeSearch(
+            InvalidDocumentTypeSearchException ex) {
         return ApiGenericResponse.error(ex.getMessage());
     }
 
