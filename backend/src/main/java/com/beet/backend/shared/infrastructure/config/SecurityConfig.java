@@ -53,7 +53,8 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(java.util.List.of(
                 "http://localhost:3000",
-                "https://beet-frontend.onrender.com"));
+                "https://beet-frontend.onrender.com",
+                "http://66.179.137.37:8001"));
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(java.util.List.of("*"));
         configuration.setAllowCredentials(true);
