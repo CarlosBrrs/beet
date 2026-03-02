@@ -75,6 +75,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,format=short
+            type=raw,value=latest
 
       # Build and push Docker image (Backend)
       - name: Build and push Backend image
@@ -94,6 +95,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,format=short
+            type=raw,value=latest
 
       # Build and push Docker image (Frontend)
       - name: Build and push Frontend image
