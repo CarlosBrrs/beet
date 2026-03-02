@@ -20,6 +20,7 @@ services:
       - SPRING_PROFILES_ACTIVE=qa
       - DB_HOST=db
       - DB_PORT=5432
+      - DB_NAME=beet_qa
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
