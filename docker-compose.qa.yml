@@ -18,7 +18,7 @@ services:
     restart: always
     environment:
       - SPRING_PROFILES_ACTIVE=qa
-      - DB_HOST=db-qa
+      - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
@@ -28,7 +28,7 @@ services:
     networks:
       - beet-qa-network
     depends_on:
-      db-qa:
+      db:
         condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
@@ -36,7 +36,7 @@ services:
       timeout: 5s
       retries: 5
 
-  db-qa:
+  db:
     image: postgres:15-alpine
     restart: always
     environment:

@@ -144,7 +144,7 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.dev.yml pull
             
             # Redeploy
-            docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --remove-orphans
             
             echo "Waiting 25 seconds for services to boot and healthchecks to run..."
             sleep 25
