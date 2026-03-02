@@ -150,11 +150,10 @@ jobs:
             sleep 25
             
             # Check backend health
-            if ! docker inspect --format='{{json .State.Health.Status}}' beet-backend | grep -q "healthy"; then
+            if ! docker inspect --format='{{json .State.Health.Status}}' dev-backend-1 | grep -q "healthy"; then
               echo "Error: Backend failed healthcheck."
               echo "Initiating Rollback..."
-              # TEMPORARY: Commented out teardown so we can inspect logs using docker compose logs
-              # docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+              docker compose -f docker-compose.yml -f docker-compose.dev.yml down
               
               # Re-run with previous images if they existed
               if [ ! -z "$PREV_BACKEND_IMAGE" ]; then
