@@ -62,12 +62,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Convert repository name to lowercase
+        run: echo "REPO_LOWERCASE=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       # Extract metadata (tags, labels) for Docker (Backend)
       - name: Extract metadata for Backend
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+          images: ${{ env.REGISTRY }}/${{ env.REPO_LOWERCASE }}-backend
           # Tag with branch name (dev) AND the specific commit SHA for rollback
           tags: |
             type=ref,event=branch
@@ -87,7 +90,7 @@ jobs:
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+          images: ${{ env.REGISTRY }}/${{ env.REPO_LOWERCASE }}-frontend
           tags: |
             type=ref,event=branch
             type=sha,format=short
