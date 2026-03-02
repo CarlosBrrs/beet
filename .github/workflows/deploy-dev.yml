@@ -48,6 +48,9 @@ jobs:
   build-and-push-images:
     needs: [build-and-test-backend, build-and-test-frontend]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
