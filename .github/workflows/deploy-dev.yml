@@ -106,7 +106,7 @@ jobs:
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_API_URL=http://66.179.137.37:8081
+            NEXT_PUBLIC_API_URL=http://66.179.137.37:8081/api/v1
 
   deploy-to-vps:
     needs: build-and-push-images
