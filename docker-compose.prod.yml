@@ -1,0 +1,81 @@
+services:
+  frontend:
+    # Use pre-built image from registry
+    image: ghcr.io/CarlosBrrs/beet-frontend:latest
+    restart: always
+    environment:
+      - NODE_ENV=production
+      # Asumiendo despliegue por IP temporal: "http://<TU_IP_PUBLICA>:8081"
+      - NEXT_PUBLIC_API_URL=http://66.179.137.37:8081
+    ports:
+      # Exposed locally ONLY for Nginx to proxy to
+      - "127.0.0.1:3003:3000"
+    networks:
+      - beet-network
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    # Use pre-built image from registry
+    image: ghcr.io/CarlosBrrs/beet-backend:latest
+    restart: always
+    environment:
+      # Inject from VPS local .env file
+      - SPRING_PROFILES_ACTIVE=prod
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      # Exposed locally ONLY for Nginx to proxy to
+      - "127.0.0.1:8083:8080"
+    networks:
+      - beet-network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=beet
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    # Do NOT expose 5432 externally in Prod
+    # ports:
+    #  - "5432:5432"
+    volumes:
+      - db_data_prod:/var/lib/postgresql/data
+    networks:
+      - beet-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: always
+    volumes:
+      - uptime-kuma-data:/app/data
+    ports:
+      # Exposed locally ONLY for Nginx to proxy to
+      - "127.0.0.1:4000:3001"
+    networks:
+      - beet-network
+
+networks:
+  beet-network:
+
+volumes:
+  db_data_prod:
+  uptime-kuma-data:

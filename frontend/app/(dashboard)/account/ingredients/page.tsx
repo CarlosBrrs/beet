@@ -1,8 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRestaurantContext } from "@/components/providers/restaurant-provider"
-import { useIngredients, useCreateIngredient } from "@/lib/hooks/use-ingredients"
+import { useCreateIngredient } from "@/lib/hooks/use-ingredients"
 import { IngredientListResponse, CreateIngredientRequest } from "@/lib/api-types"
 import { IngredientList } from "@/components/modules/ingredients/ingredient-list"
 import { SheetShell } from "@/components/shared/sheet-shell"
@@ -10,8 +9,6 @@ import { IngredientForm } from "@/components/modules/ingredients/ingredient-form
 import { IngredientDetail } from "@/components/modules/ingredients/ingredient-detail"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
-import { Can } from "@/components/shared/can"
-import { PermissionModule, PermissionAction } from "@/lib/permissions"
 import { DialogShell } from "@/components/shared/dialog-shell"
 import { StockAdjustmentForm } from "@/components/modules/ingredients/stock-adjustment-form"
 import { useDeleteIngredient } from "@/lib/hooks/use-ingredients"
@@ -25,7 +22,6 @@ import { toast } from "sonner"
 // See also: use-ingredients.ts → useMockSuppliers()
 
 export default function IngredientsPage() {
-    const { restaurantId } = useRestaurantContext()
     const createMutation = useCreateIngredient()
 
     const { mutate: deleteIngredient } = useDeleteIngredient()
@@ -88,11 +84,9 @@ export default function IngredientsPage() {
                     <p className="text-muted-foreground">Manage your raw inventory items.</p>
                 </div>
 
-                <Can I={PermissionAction.CREATE} a={PermissionModule.INVENTORY}>
-                    <Button onClick={openCreate}>
-                        <Plus className="mr-2 h-4 w-4" /> Add Ingredient
-                    </Button>
-                </Can>
+                <Button onClick={openCreate}>
+                    <Plus className="mr-2 h-4 w-4" /> Add Ingredient
+                </Button>
             </div>
 
             <IngredientList
@@ -112,7 +106,6 @@ export default function IngredientsPage() {
             >
                 {selectedIngredient && isReadOnly ? (
                     <IngredientDetail
-                        restaurantId={restaurantId || ""}
                         ingredientId={selectedIngredient.id}
                     />
                 ) : selectedIngredient ? (

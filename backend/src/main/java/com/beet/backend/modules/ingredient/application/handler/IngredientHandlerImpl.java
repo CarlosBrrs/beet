@@ -5,6 +5,7 @@ import com.beet.backend.modules.ingredient.application.dto.IngredientDetailRespo
 import com.beet.backend.modules.ingredient.application.dto.IngredientListResponse;
 import com.beet.backend.modules.ingredient.application.dto.IngredientResponse;
 import com.beet.backend.modules.ingredient.application.mapper.IngredientServiceMapper;
+import com.beet.backend.modules.ingredient.application.port.out.IngredientQueryPort;
 import com.beet.backend.modules.ingredient.domain.api.IngredientServicePort;
 import com.beet.backend.modules.ingredient.domain.exception.IngredientNotFoundException;
 import com.beet.backend.modules.ingredient.domain.model.MasterIngredientDomain;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public class IngredientHandlerImpl implements IngredientHandler {
 
     private final IngredientServicePort servicePort;
+    private final IngredientQueryPort queryPort;
     private final IngredientServiceMapper mapper;
 
     @Override
@@ -50,12 +52,12 @@ public class IngredientHandlerImpl implements IngredientHandler {
             UUID ownerId, int page, int size,
             String search, String sortBy, boolean sortDesc, List<String> units) {
         return ApiGenericResponse.success(
-                servicePort.list(ownerId, page, size, search, sortBy, sortDesc, units));
+                queryPort.findAllByOwnerId(ownerId, page, size, search, sortBy, sortDesc, units));
     }
 
     @Override
     public ApiGenericResponse<IngredientDetailResponse> findById(UUID id, UUID ownerId) {
-        IngredientDetailResponse detail = servicePort.findById(id, ownerId)
+        IngredientDetailResponse detail = queryPort.findDetailById(id, ownerId)
                 .orElseThrow(() -> IngredientNotFoundException.forId(id));
         return ApiGenericResponse.success(detail);
     }

@@ -1,8 +1,6 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
-import { ApiGenericResponse, RestaurantResponse } from "@/lib/api-types"
-import { apiClient } from "@/lib/api-client"
+import { useMyRestaurants } from "@/lib/hooks/use-my-restaurants"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,13 +8,7 @@ import { Loader2, Store, ArrowRight, Plus } from "lucide-react"
 import Link from "next/link"
 
 export function RestaurantList() {
-    const { data: restaurants, isLoading, isError } = useQuery({
-        queryKey: ['my-restaurants'],
-        queryFn: async () => {
-            const data = await apiClient<ApiGenericResponse<RestaurantResponse[]>>("/restaurants/my-restaurants")
-            return data.data
-        }
-    })
+    const { data: restaurants, isLoading, isError } = useMyRestaurants()
 
     if (isLoading) {
         return (
@@ -33,10 +25,6 @@ export function RestaurantList() {
             </div>
         )
     }
-
-    console.log(restaurants)
-    const ownerRestaurants = restaurants!.filter(r => r.role === 'Owner')
-    const isOwner = ownerRestaurants.length > 0
 
     // If user has NO restaurants at all, they are a new potential owner.
     if (!restaurants || restaurants.length === 0) {

@@ -5,15 +5,14 @@ import { IngredientListResponse, MockIngredient } from "@/lib/api-types"
 import { DataTable } from "@/components/shared/data-table/data-table"
 import { Button } from "@/components/ui/button"
 import { Can } from "@/components/shared/can"
-import { PermissionModule, PermissionAction } from "@/lib/permissions"
 import { Pencil, Trash2, Eye, BarChart2 } from "lucide-react"
 import { useState } from "react"
 import { DataTableColumnHeader } from "@/components/shared/data-table/data-table-column-header"
 import { formatCurrency } from "@/lib/utils"
 import { useIngredients } from "@/lib/hooks/use-ingredients"
-import { useRestaurantContext } from "@/components/providers/restaurant-provider"
 import { useDebounce } from "@/lib/hooks/use-debounce"
 import { PaginationState, SortingState, ColumnFiltersState } from "@tanstack/react-table"
+import { PermissionAction } from "@/lib/permissions"
 
 // Columns Definition
 const createColumns = (
@@ -51,21 +50,15 @@ const createColumns = (
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onView(ingredient)}>
                             <Eye className="h-4 w-4" />
                         </Button>
-                        <Can I={PermissionAction.EDIT} a={PermissionModule.INVENTORY}>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(ingredient)}>
                                 <Pencil className="h-4 w-4" />
                             </Button>
-                        </Can>
-                        <Can I={PermissionAction.EDIT} a={PermissionModule.INVENTORY}>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" onClick={() => onAdjust(ingredient)}>
                                 <BarChart2 className="h-4 w-4" />
                             </Button>
-                        </Can>
-                        <Can I={PermissionAction.DELETE} a={PermissionModule.INVENTORY}>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDelete(ingredient)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
-                        </Can>
                     </div>
                 )
             },
@@ -80,7 +73,6 @@ interface IngredientListProps {
 }
 
 export function IngredientList({ onView, onEdit, onAdjust, onDelete }: IngredientListProps) {
-    const { restaurantId } = useRestaurantContext()
 
     // Controlled Server-Side States
     const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })

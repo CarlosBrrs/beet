@@ -1,11 +1,18 @@
 "use client"
 
 import { useRestaurantContext } from "@/components/providers/restaurant-provider"
+import { useMyPermissions } from "@/lib/hooks/use-my-permissions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function RestaurantDashboard() {
-    const { roleName, isLoading, restaurantId } = useRestaurantContext()
+    const { restaurantId } = useRestaurantContext()
+    const { data: permissions, isLoading } = useMyPermissions()
+
+    // Find this restaurant's role, or fall back to OWNER if global permission exists
+    const roleEntry = permissions?.find(p => p.restaurantId === restaurantId)
+        ?? permissions?.find(p => p.restaurantId === null)
+    const roleName = roleEntry?.role ?? null
 
     if (isLoading) {
         return (

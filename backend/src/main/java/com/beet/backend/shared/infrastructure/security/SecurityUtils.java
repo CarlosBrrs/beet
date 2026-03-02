@@ -10,10 +10,25 @@ import java.util.UUID;
 public class SecurityUtils {
 
     public static UUID getAuthenticatedUserId() {
+        return getAuthenticatedUserDetails().getId();
+    }
+
+    /**
+     * Returns the effective owner ID for multi-tenant queries.
+     * - For owners: returns their own userId (ownerId is null).
+     * - For employees: returns the ownerId of the owner who created them.
+     */
+    public static UUID getEffectiveOwnerId() {
+        CustomUserDetails details = getAuthenticatedUserDetails();
+        return details.getOwnerId() != null ? details.getOwnerId() : details.getId();
+    }
+
+    public static CustomUserDetails getAuthenticatedUserDetails() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
-            return userDetails.getId();
+            return userDetails;
         }
-        throw UserNotFoundException.forUsername(authentication.getName());
+        throw UserNotFoundException.forUsername(
+                authentication != null ? authentication.getName() : "unknown");
     }
 }

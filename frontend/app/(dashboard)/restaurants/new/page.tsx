@@ -33,10 +33,10 @@ import { apiClient } from "@/lib/api-client"
 import { ApiGenericResponse, RestaurantResponse } from "@/lib/api-types"
 
 const createRestaurantSchema = z.object({
-    name: z.string().min(3, "Name must be at least 3 characters"),
+    name: z.string().trim().min(3, "Name must be at least 3 characters"),
     operationMode: z.enum(["PREPAID", "POSTPAID"]),
-    phoneNumber: z.string().optional(),
-    address: z.string().optional(),
+    phoneNumber: z.string().trim().optional(),
+    address: z.string().trim().optional(),
     email: z.email().optional().or(z.literal("")),
     settings: z.object({
         prePaymentEnabled: z.boolean(),

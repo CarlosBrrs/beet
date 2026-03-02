@@ -9,10 +9,13 @@ export enum PermissionModule {
     RECIPES = "RECIPES",
     PAYMENTS = "PAYMENTS",
     INVENTORY = "INVENTORY",
+    INVOICES = "INVOICES",
     OPERATIONS = "OPERATIONS",
     RESTAURANTS = "RESTAURANTS",
-    SUBSCRIPTION = "SUBSCRIPTION"
+    SUBSCRIPTION = "SUBSCRIPTION",
+    MENUS = "MENUS"
 }
+
 
 export enum PermissionAction {
     VIEW = "VIEW",
@@ -21,6 +24,7 @@ export enum PermissionAction {
     EDIT = "EDIT",
     DELETE = "DELETE",
     MANAGE = "MANAGE",
+    ACTIVATE = "ACTIVATE",
     OPEN = "OPEN",
     CLOSE = "CLOSE",
     VOID = "VOID",

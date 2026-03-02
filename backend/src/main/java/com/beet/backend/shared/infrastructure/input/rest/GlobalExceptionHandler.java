@@ -1,10 +1,15 @@
 package com.beet.backend.shared.infrastructure.input.rest;
 
+import com.beet.backend.shared.domain.exception.AccessDeniedException;
 import com.beet.backend.shared.domain.exception.ResourceAlreadyExistsException;
 import com.beet.backend.shared.domain.exception.ResourceNotFoundException;
 import com.beet.backend.shared.domain.exception.ResourceLimitExceededException;
 import com.beet.backend.modules.documenttype.domain.exception.InvalidDocumentTypeSearchException;
 import com.beet.backend.modules.ingredient.domain.exception.UnitTypeMismatchException;
+import com.beet.backend.modules.inventory.domain.exception.IngredientAlreadyActivatedException;
+import com.beet.backend.modules.inventory.domain.exception.IngredientOwnershipException;
+import com.beet.backend.modules.inventory.domain.exception.IngredientStockNotFoundException;
+import com.beet.backend.modules.role.domain.exception.RoleConflictException;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -69,6 +74,36 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiGenericResponse<Void> handleInvalidDocumentTypeSearch(
             InvalidDocumentTypeSearchException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(RoleConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiGenericResponse<Void> handleRoleConflict(RoleConflictException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(IngredientAlreadyActivatedException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiGenericResponse<Void> handleIngredientAlreadyActivated(IngredientAlreadyActivatedException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(IngredientStockNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiGenericResponse<Void> handleIngredientStockNotFound(IngredientStockNotFoundException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(IngredientOwnershipException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiGenericResponse<Void> handleIngredientOwnership(IngredientOwnershipException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiGenericResponse<Void> handleAccessDenied(AccessDeniedException ex) {
         return ApiGenericResponse.error(ex.getMessage());
     }
 

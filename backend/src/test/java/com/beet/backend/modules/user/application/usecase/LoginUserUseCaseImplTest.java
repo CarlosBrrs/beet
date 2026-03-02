@@ -1,6 +1,5 @@
 package com.beet.backend.modules.user.application.usecase;
 
-import com.beet.backend.modules.user.application.dto.LoginRequest;
 import com.beet.backend.modules.user.application.dto.LoginResponse;
 import com.beet.backend.modules.user.application.dto.UserResponse;
 import com.beet.backend.modules.user.application.mapper.UserServiceMapper;

@@ -3,7 +3,6 @@ package com.beet.backend.modules.restaurant.infrastructure.input.rest;
 import com.beet.backend.modules.restaurant.application.dto.RestaurantRequest;
 import com.beet.backend.modules.restaurant.application.dto.RestaurantResponse;
 import com.beet.backend.modules.restaurant.application.dto.RestaurantUpdateRequest;
-import com.beet.backend.modules.restaurant.application.dto.UserRestaurantPermissionsResponse;
 import com.beet.backend.modules.restaurant.application.handler.RestaurantHandler;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
 import com.beet.backend.shared.infrastructure.security.SecurityUtils;
@@ -35,12 +34,6 @@ public class RestaurantController {
     public ResponseEntity<ApiGenericResponse<RestaurantResponse>> getById(@PathVariable UUID id) {
         UUID ownerId = SecurityUtils.getAuthenticatedUserId();
         return ResponseEntity.ok(handler.getById(id, ownerId));
-    }
-
-    @GetMapping("/{id}/my-permissions")
-    public ResponseEntity<ApiGenericResponse<UserRestaurantPermissionsResponse>> getPermissions(@PathVariable UUID id) {
-        UUID userId = SecurityUtils.getAuthenticatedUserId();
-        return ResponseEntity.ok(handler.getPermissions(id, userId));
     }
 
     @GetMapping("/my-restaurants")

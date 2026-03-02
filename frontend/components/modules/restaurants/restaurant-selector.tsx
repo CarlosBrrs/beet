@@ -20,9 +20,8 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { useQuery } from "@tanstack/react-query"
-import { ApiGenericResponse, RestaurantResponse } from "@/lib/api-types"
-import { apiClient } from "@/lib/api-client"
+import { useMyRestaurants } from "@/lib/hooks/use-my-restaurants"
+import { Can } from "@/components/shared/can"
 
 export function RestaurantSelector({ className }: { className?: string }) {
     const router = useRouter()
@@ -30,14 +29,7 @@ export function RestaurantSelector({ className }: { className?: string }) {
     const currentRestaurantId = params?.id as string
     const [open, setOpen] = React.useState(false)
 
-    // Fetch My Restaurants
-    const { data: restaurants = [], isLoading } = useQuery({
-        queryKey: ['my-restaurants'],
-        queryFn: async () => {
-            const data = await apiClient<ApiGenericResponse<RestaurantResponse[]>>("/restaurants/my-restaurants")
-            return data.data
-        }
-    })
+    const { data: restaurants = [], isLoading } = useMyRestaurants()
 
     const selectedRestaurant = restaurants.find(r => r.id === currentRestaurantId)
 
@@ -86,19 +78,21 @@ export function RestaurantSelector({ className }: { className?: string }) {
                         </CommandGroup>
                     </CommandList>
                     <CommandSeparator />
-                    <CommandList>
-                        <CommandGroup>
-                            <CommandItem
-                                onSelect={() => {
-                                    setOpen(false)
-                                    router.push("/restaurants/new") // Or modal
-                                }}
-                            >
-                                <PlusCircle className="mr-2 h-5 w-5" />
-                                Create Restaurant
-                            </CommandItem>
-                        </CommandGroup>
-                    </CommandList>
+                    <Can I="CREATE" a="RESTAURANTS">
+                        <CommandList>
+                            <CommandGroup>
+                                <CommandItem
+                                    onSelect={() => {
+                                        setOpen(false)
+                                        router.push("/restaurants/new") // Or modal
+                                    }}
+                                >
+                                    <PlusCircle className="mr-2 h-5 w-5" />
+                                    Create Restaurant
+                                </CommandItem>
+                            </CommandGroup>
+                        </CommandList>
+                    </Can>
                 </Command>
             </PopoverContent>
         </Popover>

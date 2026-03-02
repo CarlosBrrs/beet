@@ -11,7 +11,10 @@ import {
     ChefHat,
     Receipt,
     MonitorSmartphone,
-    LayoutGrid
+    LayoutGrid,
+    User,
+    CreditCard,
+    Package
 } from "lucide-react"
 import { PermissionModule } from "@/lib/permissions"
 
@@ -34,10 +37,27 @@ export const navigationConfig: NavItem[] = [
                 icon: LayoutDashboard,
             },
             {
+                title: "Inventory",
+                href: "/inventory",
+                icon: Package,
+                module: PermissionModule.INVENTORY,
+            },
+            {
+                title: "Purchases",
+                href: "/purchases",
+                icon: FileText,
+                module: PermissionModule.INVOICES,
+            },
+        ]
+    },
+    {
+        title: "Example 1",
+        items: [
+            {
                 title: "POS",
                 href: "/pos",
                 icon: Store,
-                module: PermissionModule.ORDERS, // Changed from POS (Uses existing backend module)
+                module: PermissionModule.ORDERS,
             },
             {
                 title: "Tables",
@@ -49,59 +69,40 @@ export const navigationConfig: NavItem[] = [
                 title: "Live Orders (KDS)",
                 href: "/orders/active",
                 icon: Utensils,
-                module: PermissionModule.KDS, // Updated from ORDERS
-            }
-        ]
-    },
-    {
-        title: "Inventory & Catalog",
-        module: PermissionModule.INVENTORY,
-        items: [
-            {
-                title: "Ingredients",
-                href: "/ingredients",
-                icon: Archive,
-            },
-            {
-                title: "Recipes",
-                href: "/recipes",
-                icon: ChefHat,
-                module: PermissionModule.RECIPES,
-            },
-            {
-                title: "Products",
-                href: "/products",
-                icon: ShoppingCart,
-                module: PermissionModule.CATALOG,
+                module: PermissionModule.KDS,
             },
             {
                 title: "Menus",
                 href: "/menus",
                 icon: FileText,
-                module: PermissionModule.CATALOG,
+                module: PermissionModule.MENUS,
             }
         ]
     },
     {
-        title: "Management",
+        title: "Example 2",
         items: [
             {
                 title: "Sales & Reports",
                 href: "/reports",
                 icon: Receipt,
-                module: PermissionModule.FINANCE, // Updated from RESTAURANT
+                module: PermissionModule.FINANCE,
             },
             {
                 title: "Staff",
                 href: "/staff",
                 icon: Users,
-                module: PermissionModule.RESTAURANTS, // Changed from STAFF to RESTAURANTS (Managing business)
-            },
+                module: PermissionModule.RESTAURANTS,
+            }
+        ]
+    },
+    {
+        title: "Account",
+        items: [
             {
-                title: "Suppliers",
-                href: "/suppliers",
-                icon: Truck,
-                module: PermissionModule.INVENTORY,
+                title: "Back to Account Central",
+                href: "/account/restaurants",
+                icon: User,
             }
         ]
     },
@@ -120,6 +121,74 @@ export const navigationConfig: NavItem[] = [
                 icon: MonitorSmartphone,
                 module: PermissionModule.OPERATIONS,
             },
+        ]
+    }
+]
+
+export const accountNavigationConfig: NavItem[] = [
+    {
+        title: "My Business",
+        items: [
+            {
+                title: "Dashboard",
+                href: "/account/dashboard",
+                icon: LayoutDashboard,
+            },
+            {
+                title: "Restaurants",
+                href: "/account/restaurants",
+                icon: Store,
+            }
+        ]
+    },
+    {
+        title: "Master Catalog",
+        module: PermissionModule.INVENTORY,
+        items: [
+            {
+                title: "Ingredients",
+                href: "/account/ingredients",
+                icon: Archive,
+            },
+            {
+                title: "Recipes",
+                href: "/account/recipes",
+                icon: ChefHat,
+                module: PermissionModule.RECIPES,
+            },
+            {
+                title: "Products",
+                href: "/account/products",
+                icon: ShoppingCart,
+                module: PermissionModule.CATALOG,
+            },
+            {
+                title: "Menus",
+                href: "/account/menus",
+                icon: FileText,
+                module: PermissionModule.CATALOG,
+            },
+            {
+                title: "Suppliers",
+                href: "/account/suppliers",
+                icon: Truck,
+                module: PermissionModule.INVENTORY,
+            }
+        ]
+    },
+    {
+        title: "Settings",
+        items: [
+            {
+                title: "Profile",
+                href: "/account/profile",
+                icon: User,
+            },
+            {
+                title: "Billing",
+                href: "/account/billing",
+                icon: CreditCard,
+            }
         ]
     }
 ]

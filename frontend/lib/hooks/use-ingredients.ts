@@ -6,7 +6,7 @@ import {
     MockIngredient,
     CreateIngredientRequest,
     IngredientResponse,
-    MockSupplier,
+    SupplierResponse,
     IngredientListResponse,
     IngredientDetailResponse
 } from "@/lib/api-types"
@@ -61,26 +61,20 @@ const MOCK_INGREDIENTS: MockIngredient[] = [
     { id: "35", restaurantId: "mock", name: "Dark Chocolate", unit: "kg", cost: 9.00, currentStock: 8 },
 ]
 
-// ── Mock Suppliers (simulates existing suppliers for the form) ──
-// TODO: [SCALABILITY] Evaluate supplier retrieval strategy before going to production.
-// Currently loads ALL suppliers in-memory. If the supplier list grows significantly,
-// consider:
-//   1. Server-side pagination (cursor or offset) with a search/filter endpoint
-//   2. Debounced search-as-you-type with React Query + keepPreviousData
-//   3. Virtualised Select dropdown (e.g. react-select + react-window)
-//   4. Caching strategy: how long to cache, stale-while-revalidate, etc.
-// This is fine for < 200 suppliers, but will degrade beyond that.
+// ── Suppliers ──
 
-const MOCK_SUPPLIERS: MockSupplier[] = [
-    { id: "s1", name: "Molinos del Sur", documentTypeId: "dt-nit", documentNumber: "900-123-456" },
-    { id: "s2", name: "Distribuidora La Central", documentTypeId: "dt-nit", documentNumber: "800-456-789" },
-    { id: "s3", name: "Lácteos El Prado", documentTypeId: "dt-cc", documentNumber: "12345678" },
-    { id: "s4", name: "Carnes Premium S.A.", documentTypeId: "dt-nit", documentNumber: "901-222-333" },
-    { id: "s5", name: "Frutas y Verduras Express", documentTypeId: "dt-cc", documentNumber: "98765432" },
-]
+async function fetchSuppliers(): Promise<SupplierResponse[]> {
+    const data = await apiClient<ApiGenericResponse<SupplierResponse[]>>("/suppliers")
+    if (!data.success) throw new Error(data.errorMessage || "Failed to fetch suppliers")
+    return data.data
+}
 
-export function useMockSuppliers() {
-    return MOCK_SUPPLIERS
+export function useSuppliers() {
+    return useQuery({
+        queryKey: ["suppliers"],
+        queryFn: fetchSuppliers,
+        staleTime: 1000 * 60 * 5, // Cache for 5 minutes (they change rarely)
+    })
 }
 
 // ── Query Keys ──
@@ -169,6 +163,7 @@ export function useCreateIngredient() {
         mutationFn: (payload: CreateIngredientRequest) => createIngredient(payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists() })
+            queryClient.invalidateQueries({ queryKey: ["suppliers"] })
         },
     })
 }

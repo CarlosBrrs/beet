@@ -5,11 +5,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { formatCurrency } from "@/lib/utils"
 
 interface IngredientDetailProps {
-    restaurantId: string
     ingredientId: string
 }
 
-export function IngredientDetail({ restaurantId, ingredientId }: IngredientDetailProps) {
+export function IngredientDetail({ ingredientId }: IngredientDetailProps) {
     const { data: ingredient, isLoading, isError } = useIngredient(ingredientId)
 
     if (isLoading) {

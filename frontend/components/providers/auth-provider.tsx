@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import { UserResponse } from "@/lib/api-types"
 import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
 
 interface AuthContextType {
     user: UserResponse | null
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [token, setToken] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const router = useRouter()
+    const queryClient = useQueryClient()
 
     useEffect(() => {
         // Hydrate auth state from localStorage
@@ -58,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(newToken)
         setUser(newUser)
         toast.success(`Welcome back, ${newUser.firstName}!`)
-        router.push("/dashboard")
+        router.push("/account/dashboard")
     }
 
     const logout = () => {
@@ -66,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem(USER_KEY)
         setToken(null)
         setUser(null)
+        queryClient.clear() // Wipe all cached queries to prevent stale data on next login
         router.push("/login")
     }
 

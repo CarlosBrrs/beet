@@ -13,12 +13,14 @@ import java.util.UUID;
 public class CustomUserDetails implements UserDetails {
 
     private final UUID id;
+    private final UUID ownerId; // null for owners, points to owner for employees
     private final String email;
     private final String password;
     private final Collection<? extends GrantedAuthority> authorities;
 
     public CustomUserDetails(User user) {
         this.id = user.getId();
+        this.ownerId = user.getOwnerId();
         this.email = user.getEmail();
         this.password = user.getPasswordHash();
         this.authorities = Collections.emptyList(); // Handles roles later

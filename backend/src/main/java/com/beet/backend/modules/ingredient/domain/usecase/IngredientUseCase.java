@@ -1,7 +1,5 @@
 package com.beet.backend.modules.ingredient.domain.usecase;
 
-import com.beet.backend.modules.ingredient.application.dto.IngredientDetailResponse;
-import com.beet.backend.modules.ingredient.application.dto.IngredientListResponse;
 import com.beet.backend.modules.ingredient.domain.api.IngredientServicePort;
 import com.beet.backend.modules.ingredient.domain.exception.IngredientAlreadyExistsException;
 import com.beet.backend.modules.ingredient.domain.exception.UnitTypeMismatchException;
@@ -12,15 +10,12 @@ import com.beet.backend.modules.supplier.domain.api.SupplierServicePort;
 import com.beet.backend.modules.supplier.domain.model.SupplierDomain;
 import com.beet.backend.modules.unit.domain.api.UnitServicePort;
 import com.beet.backend.modules.unit.domain.model.UnitDomain;
-import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -95,17 +90,5 @@ public class IngredientUseCase implements IngredientServicePort {
         // 10. Return enriched domain
         savedIngredient.setActiveSupplierItemId(savedItem.getId());
         return savedIngredient;
-    }
-
-    @Override
-    public PageResponse<IngredientListResponse> list(
-            UUID ownerId, int page, int size,
-            String search, String sortBy, boolean sortDesc, List<String> units) {
-        return persistencePort.findAllByOwnerId(ownerId, page, size, search, sortBy, sortDesc, units);
-    }
-
-    @Override
-    public Optional<IngredientDetailResponse> findById(UUID id, UUID ownerId) {
-        return persistencePort.findDetailById(id, ownerId);
     }
 }

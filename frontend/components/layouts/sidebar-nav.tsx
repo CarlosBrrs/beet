@@ -13,7 +13,7 @@ import {
 import { ChevronRight } from "lucide-react"
 import { NavItem, navigationConfig } from "@/config/navigation"
 import { useRestaurantContext } from "@/components/providers/restaurant-provider"
-import { useRestaurantPermissions } from "@/lib/hooks/use-restaurant-permissions"
+import { useMyPermissions } from "@/lib/hooks/use-my-permissions"
 import { useState, useEffect } from "react"
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -23,7 +23,7 @@ interface SidebarNavProps extends React.HTMLAttributes<HTMLDivElement> {
 export function SidebarNav({ className, items = navigationConfig }: SidebarNavProps) {
     const pathname = usePathname()
     const { restaurantId } = useRestaurantContext()
-    const { can } = useRestaurantPermissions(restaurantId)
+    const { can } = useMyPermissions()
 
     // Filter items based on permissions
     const filterNavItems = (items: NavItem[]): NavItem[] => {
@@ -32,11 +32,10 @@ export function SidebarNav({ className, items = navigationConfig }: SidebarNavPr
                 // If item has a specific module requirement, check 'READ' access
                 // If item has a specific module requirement
                 if (item.module) {
-                    // We check if the user has ANY permission on this module.
-                    // This is how we determine visibility ("Can I open this door?").
-                    // If the user has specific actions like ["EDIT"], they implicitly can "SEE" the module link.
-                    const permissions = can(item.module) // We will overload 'can' to support just checking module existence
-                    if (!permissions) return false
+                    // Check if user has ANY permission on this module for the current restaurant.
+                    // Owners (ALL:ALL) always pass this check automatically.
+                    const hasAccess = can("VIEW", item.module, restaurantId)
+                    if (!hasAccess) return false
                 }
                 return true
             })
@@ -94,7 +93,7 @@ function SidebarNavItem({
     // Determine the full Href (injecting restaurantId if needed)
     const resolveHref = (href?: string) => {
         if (!href) return "#"
-        // Avoid double prefixing if href is absolute or already parameterized
+        if (href.startsWith("/account")) return href
         return `/restaurants/${restaurantId}${href}`
     }
 

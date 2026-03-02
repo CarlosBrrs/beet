@@ -92,6 +92,18 @@ export interface LoginResponse {
 // Permissions Types
 import { PermissionMap } from "./permissions";
 
+/**
+ * A single permission scope returned by GET /auth/my-permissions.
+ * - restaurantId === null  → global role (e.g. OWNER)
+ * - restaurantId is set    → role scoped to a specific restaurant
+ */
+export interface UserPermissionEntry {
+    restaurantId: string | null;
+    role: string;
+    permissions: PermissionMap;
+}
+
+/** @deprecated Use UserPermissionEntry from /auth/my-permissions instead */
 export interface UserRestaurantPermissions {
     restaurantId: string;
     userId: string;
@@ -100,6 +112,7 @@ export interface UserRestaurantPermissions {
     permissions: PermissionMap;
 }
 
+/** @deprecated Use UserPermissionEntry from /auth/my-permissions instead */
 export type UserRestaurantPermissionsResponse = UserRestaurantPermissions;
 
 export interface RestaurantSettings {
@@ -107,6 +120,8 @@ export interface RestaurantSettings {
     allowTakeaway: boolean;
     allowDelivery: boolean;
     maxTableCapacity: number;
+    taxApplyMode: 'PER_INVOICE' | 'PER_ITEM';
+    defaultTaxPercentage: number;
 }
 
 export interface RestaurantRequest {
@@ -235,11 +250,168 @@ export interface IngredientDetailResponse {
     activeSupplier: ActiveSupplierInfo | null;
 }
 
-// ── Mock Supplier (for supplier selection in form) ──
+// ── Suppliers ──
 
-export interface MockSupplier {
+export interface SupplierResponse {
     id: string;
     name: string;
     documentTypeId: string;
     documentNumber: string;
+    contactName: string;
+    email: string;
+    phone: string;
+    address: string;
+    isActive: boolean;
+}
+
+// ── Inventory (real, matches backend DTOs) ──
+
+export interface InventoryStockResponse {
+    id: string;
+    masterIngredientId: string;
+    ingredientName: string;
+    unitAbbreviation: string;
+    currentStock: number;
+    minStock: number;
+    lowStock: boolean;
+}
+
+export interface ActivateIngredientInventoryRequest {
+    masterIngredientId: string;
+    initialStock: number;
+    minStock?: number;
+}
+
+export type AdjustmentMode = "REPLACE" | "DELTA";
+export type TransactionReason = "ADJUSTMENT" | "WASTE" | "CORRECTION" | "INITIAL" | "PURCHASE" | "SALE";
+
+export interface AdjustStockRequest {
+    mode: AdjustmentMode;
+    value: number;
+    reason: TransactionReason;
+    notes?: string;
+}
+
+export interface InventoryTransactionResponse {
+    id: string;
+    delta: number;
+    reason: TransactionReason;
+    invoiceId: string | null;
+    previousStock: number;
+    resultingStock: number;
+    notes: string | null;
+    createdAt: string; // ISO 8601
+}
+
+// ── Invoice types ──
+
+export interface RegisterInvoiceRequest {
+    supplierId: string;
+    supplierInvoiceNumber: string;
+    emissionDate: string; // YYYY-MM-DD
+    notes?: string;
+    taxPercentage?: number;       // For PER_INVOICE mode
+    items: RegisterInvoiceItemRequest[];
+}
+
+export interface RegisterInvoiceItemRequest {
+    supplierItemId: string;
+    quantityPurchased: number;
+    unitPricePurchased: number;
+    taxPercentage?: number;       // For PER_ITEM mode
+    conversionFactorUsed: number;
+}
+
+export interface InvoiceResponse {
+    id: string;
+    supplierName: string | null;
+    supplierInvoiceNumber: string;
+    emissionDate: string;
+    receivedAt: string;
+    totalAmount: number;
+    itemCount: number;
+    status: string;
+}
+
+export interface InvoiceDetailResponse {
+    id: string;
+    supplierName: string;
+    supplierInvoiceNumber: string;
+    emissionDate: string;
+    receivedAt: string;
+    subtotal: number;
+    totalTax: number;
+    totalAmount: number;
+    notes: string | null;
+    status: string;
+    items: InvoiceItemDetailResponse[];
+}
+
+export interface InvoiceItemDetailResponse {
+    id: string;
+    ingredientName: string;
+    purchaseUnitName: string;
+    conversionFactorUsed: number;
+    baseUnitAbbreviation: string;
+    quantityPurchased: number;
+    unitPricePurchased: number;
+    taxPercentage: number;
+    subtotal: number;
+    taxAmount: number;
+    costPerBaseUnit: number;
+}
+
+export interface SupplierItemForInvoiceResponse {
+    id: string;
+    brandName: string;
+    purchaseUnitName: string;
+    conversionFactor: number;
+    lastCostBase: number | null;
+    masterIngredientId: string;
+    ingredientName: string;
+    baseUnitAbbreviation: string;
+}
+
+// ── Menus ──
+
+export interface SubmenuResponse {
+    id: string;
+    menuId: string;
+    name: string;
+    description: string;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface MenuResponse {
+    id: string;
+    restaurantId: string;
+    name: string;
+    description: string;
+    createdAt: string;
+    updatedAt: string;
+    submenus: SubmenuResponse[];
+}
+
+export interface CreateMenuRequest {
+    name: string;
+    description?: string;
+}
+
+export interface UpdateMenuRequest {
+    name: string;
+    description?: string;
+}
+
+export interface CreateSubmenuRequest {
+    name: string;
+    description?: string;
+    sortOrder?: number;
+}
+
+export interface UpdateSubmenuRequest {
+    name: string;
+    description?: string;
+    sortOrder?: number;
 }

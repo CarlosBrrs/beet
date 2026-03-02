@@ -19,7 +19,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { CreateIngredientRequest } from "@/lib/api-types"
 import { useUnits } from "@/lib/hooks/use-units"
 import { useDocumentTypes } from "@/lib/hooks/use-document-types"
-import { useMockSuppliers } from "@/lib/hooks/use-ingredients"
+import { useSuppliers } from "@/lib/hooks/use-ingredients"
 import { Loader2, Plus, Search, HelpCircle, X } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { formatPriceDisplay, parsePriceInput, formatNumber } from "@/lib/formatters"
@@ -28,22 +28,22 @@ import { formatPriceDisplay, parsePriceInput, formatNumber } from "@/lib/formatt
 
 const formSchema = z.object({
     // Ingredient
-    name: z.string().min(2, "Ingredient name must be at least 2 characters."),
-    baseUnitId: z.string().min(1, "Please select a base unit."),
+    name: z.string().trim().min(2, "Ingredient name must be at least 2 characters."),
+    baseUnitId: z.string().trim().min(1, "Please select a base unit."),
 
     // Supplier
     supplierMode: z.enum(["existing", "new"]),
-    existingSupplierId: z.string().optional(),
-    supplierName: z.string().optional(),
-    documentTypeId: z.string().optional(),
-    documentNumber: z.string().optional(),
+    existingSupplierId: z.string().trim().optional(),
+    supplierName: z.string().trim().optional(),
+    documentTypeId: z.string().trim().optional(),
+    documentNumber: z.string().trim().optional(),
 
     // Purchase Info (reordered for natural reading)
-    purchaseUnitName: z.string().min(1, "Purchase unit name is required."),
+    purchaseUnitName: z.string().trim().min(1, "Purchase unit name is required."),
     conversionFactor: z.number().positive("Must be greater than 0."),
-    conversionUnitId: z.string().min(1, "Please select a conversion unit."),
+    conversionUnitId: z.string().trim().min(1, "Please select a conversion unit."),
     totalPrice: z.number().positive("Must be greater than 0."),
-    brandName: z.string().optional(),
+    brandName: z.string().trim().optional(),
 }).superRefine((data, ctx) => {
     if (data.supplierMode === "existing" && !data.existingSupplierId) {
         ctx.addIssue({
@@ -161,9 +161,19 @@ interface IngredientFormProps {
 export function IngredientForm({ onSubmit, isSubmitting }: IngredientFormProps) {
     const { data: units, isLoading: unitsLoading } = useUnits()
     const { data: documentTypes, isLoading: docTypesLoading } = useDocumentTypes("CO")
-    const mockSuppliers = useMockSuppliers()
+    const { data: suppliers = [], isLoading: suppliersLoading } = useSuppliers()
     const [showHelp, setShowHelp] = useState(false)
     const [priceDisplay, setPriceDisplay] = useState("")
+    const [supplierSearch, setSupplierSearch] = useState("")
+
+    const filteredSuppliers = useMemo(() => {
+        if (!supplierSearch) return suppliers
+        const lowerSearch = supplierSearch.toLowerCase()
+        return suppliers.filter(s =>
+            s.name.toLowerCase().includes(lowerSearch) ||
+            s.documentNumber.includes(lowerSearch)
+        )
+    }, [suppliers, supplierSearch])
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -236,7 +246,7 @@ export function IngredientForm({ onSubmit, isSubmitting }: IngredientFormProps) 
     // Build the real payload
     const handleFormSubmit = (values: FormValues) => {
         const selectedSupplier = values.supplierMode === "existing"
-            ? mockSuppliers.find(s => s.id === values.existingSupplierId)
+            ? suppliers.find(s => s.id === values.existingSupplierId)
             : null
 
         const payload: CreateIngredientRequest = {
@@ -268,7 +278,7 @@ export function IngredientForm({ onSubmit, isSubmitting }: IngredientFormProps) 
         onSubmit(payload)
     }
 
-    if (unitsLoading || docTypesLoading) {
+    if (unitsLoading || docTypesLoading || suppliersLoading) {
         return (
             <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -377,11 +387,40 @@ export function IngredientForm({ onSubmit, isSubmitting }: IngredientFormProps) 
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {mockSuppliers.map(s => (
-                                                <SelectItem key={s.id} value={s.id}>
-                                                    {s.name} ({s.documentNumber})
-                                                </SelectItem>
-                                            ))}
+                                            <div className="p-2 border-b">
+                                                <div className="relative">
+                                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                    <Input
+                                                        placeholder="Search supplier..."
+                                                        className="pl-8 h-9 bg-muted/40"
+                                                        value={supplierSearch}
+                                                        onChange={(e) => setSupplierSearch(e.target.value)}
+                                                        onKeyDown={(e) => e.stopPropagation()}
+                                                    />
+                                                </div>
+                                            </div>
+                                            {filteredSuppliers.length === 0 ? (
+                                                <div className="p-4 flex flex-col items-center justify-center text-center text-sm text-muted-foreground space-y-1">
+                                                    <p>No suppliers found for "{supplierSearch}"</p>
+                                                    <Button
+                                                        variant="link"
+                                                        className="h-auto p-0"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            form.setValue("supplierMode", "new", { shouldValidate: true })
+                                                            form.setValue("supplierName", supplierSearch)
+                                                        }}
+                                                    >
+                                                        Create it instead
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                filteredSuppliers.map(s => (
+                                                    <SelectItem key={s.id} value={s.id}>
+                                                        {s.name} ({s.documentNumber})
+                                                    </SelectItem>
+                                                ))
+                                            )}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />

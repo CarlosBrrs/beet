@@ -2,6 +2,7 @@ package com.beet.backend.modules.ingredient.infrastructure.output.persistence.jd
 
 import com.beet.backend.modules.ingredient.application.dto.IngredientDetailResponse;
 import com.beet.backend.modules.ingredient.application.dto.IngredientListResponse;
+import com.beet.backend.modules.ingredient.application.port.out.IngredientQueryPort;
 import com.beet.backend.modules.ingredient.domain.model.MasterIngredientDomain;
 import com.beet.backend.modules.ingredient.domain.model.SupplierItemDomain;
 import com.beet.backend.modules.ingredient.domain.spi.IngredientPersistencePort;
@@ -11,7 +12,6 @@ import com.beet.backend.modules.ingredient.infrastructure.output.persistence.jdb
 import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +23,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class IngredientJdbcAdapter implements IngredientPersistencePort {
+public class IngredientJdbcAdapter implements IngredientPersistencePort, IngredientQueryPort {
 
         // ── Write repositories ────────────────────────────────────────────────────
         private final MasterIngredientJdbcRepository ingredientRepository;
@@ -68,6 +68,11 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort {
         @Override
         public boolean existsByNameAndOwnerId(String name, UUID ownerId) {
                 return ingredientRepository.existsByNameAndOwnerId(name, ownerId);
+        }
+
+        @Override
+        public boolean existsByIdAndOwnerId(UUID ingredientId, UUID ownerId) {
+                return ingredientRepository.existsByIdAndOwnerId(ingredientId, ownerId);
         }
 
         // ═════════════════════════════════════════════════════════════════════════

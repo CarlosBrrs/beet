@@ -9,6 +9,7 @@ public enum PermissionAction {
     VIEW_ALL,
     VIEW,
     EDIT,
+    ACTIVATE, // Inventory: activate an ingredient in a restaurant
     VOID,
     VIEW_ALERTS,
     UPDATE_STATUS,

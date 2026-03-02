@@ -24,12 +24,12 @@ import { Loader2 } from "lucide-react"
 // --- Validation Schemas ---
 const deltaSchema = z.object({
     quantity: z.number().positive("Quantity must be positive"),
-    reason: z.string().min(3, "Reason is required (min 3 chars)"),
+    reason: z.string().trim().min(3, "Reason is required (min 3 chars)"),
 })
 
 const absoluteSchema = z.object({
     quantity: z.number().min(0, "Stock cannot be negative"),
-    reason: z.string().min(3, "Reason is required (min 3 chars)"),
+    reason: z.string().trim().min(3, "Reason is required (min 3 chars)"),
 })
 
 interface StockAdjustmentFormProps {
