@@ -6,7 +6,7 @@ services:
       - NODE_ENV=production
       # Asumiendo despliegue por IP temporal: "http://<TU_IP_PUBLICA>:8081"
       # ¡IMPORTANTE! Cambia esto por la IP pública de IONOS antes del despliegue final.
-      - NEXT_PUBLIC_API_URL=http://66.179.137.37:8181
+      - NEXT_PUBLIC_API_URL=http://66.179.137.37:8081
     ports:
       - "127.0.0.1:3001:3000"
     networks:
