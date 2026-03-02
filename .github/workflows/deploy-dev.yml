@@ -132,7 +132,7 @@ jobs:
             cd /opt/beet/dev
             
             # Login to registry to pull private images if needed
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u carlosbrrs --password-stdin
             
             # Record current active image versions for rollback (just in case)
             export PREV_BACKEND_IMAGE=$(docker ps -q -f name=backend | xargs -r docker inspect --format='{{.Config.Image}}')

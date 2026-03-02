@@ -1,7 +1,7 @@
 services:
   frontend:
     # Use pre-built image from registry
-    image: ghcr.io/CarlosBrrs/beet-frontend:latest
+    image: ghcr.io/carlosbrrs/beet-frontend:latest
     restart: always
     environment:
       - NODE_ENV=production
@@ -18,7 +18,7 @@ services:
 
   backend:
     # Use pre-built image from registry
-    image: ghcr.io/CarlosBrrs/beet-backend:latest
+    image: ghcr.io/carlosbrrs/beet-backend:latest
     restart: always
     environment:
       # Inject from VPS local .env file
@@ -75,6 +75,7 @@ services:
 
 networks:
   beet-network:
+
 
 volumes:
   db_data_prod:

@@ -1,6 +1,6 @@
 services:
   frontend:
-    image: ghcr.io/CarlosBrrs/beet-frontend:latest
+    image: ghcr.io/carlosbrrs/beet-frontend:latest
     restart: always
     environment:
       - NODE_ENV=production
@@ -14,7 +14,7 @@ services:
         condition: service_healthy
 
   backend:
-    image: ghcr.io/CarlosBrrs/beet-backend:latest
+    image: ghcr.io/carlosbrrs/beet-backend:latest
     restart: always
     environment:
       - SPRING_PROFILES_ACTIVE=qa
