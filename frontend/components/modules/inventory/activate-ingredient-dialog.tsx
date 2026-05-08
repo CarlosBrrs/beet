@@ -14,10 +14,11 @@ import { toast } from "sonner"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { formatPriceDisplay, parsePriceInput } from "@/lib/formatters"
 
 const activateSchema = z.object({
-    initialStock: z.number({ message: "Required" }).min(0, "Must be >= 0"),
-    minStock: z.number({ message: "Required" }).min(0, "Must be >= 0").optional(),
+    initialStock: z.string().min(1, { message: "Required" }),
+    minStock: z.string().optional(),
 })
 
 type ActivateFormValues = z.infer<typeof activateSchema>
@@ -47,7 +48,7 @@ export function ActivateIngredientDialog({ open, onOpenChange }: ActivateIngredi
     const form = useForm<ActivateFormValues>({
         resolver: zodResolver(activateSchema),
         mode: "onChange",
-        defaultValues: { initialStock: 0, minStock: 0 },
+        defaultValues: { initialStock: "", minStock: "" },
     })
 
     const handleActivate = (values: ActivateFormValues) => {
@@ -56,8 +57,8 @@ export function ActivateIngredientDialog({ open, onOpenChange }: ActivateIngredi
         activateMutation.mutate(
             {
                 masterIngredientId: selectedIngredient.masterIngredientId,
-                initialStock: values.initialStock,
-                minStock: values.minStock,
+                initialStock: parsePriceInput(values.initialStock) || 0,
+                minStock: values.minStock ? parsePriceInput(values.minStock) : undefined,
             },
             {
                 onSuccess: () => {
@@ -149,10 +150,11 @@ export function ActivateIngredientDialog({ open, onOpenChange }: ActivateIngredi
                                 <Label htmlFor="initialStock">Initial Stock ({selectedIngredient.unitAbbreviation})</Label>
                                 <Input
                                     id="initialStock"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    {...form.register("initialStock", { valueAsNumber: true })}
+                                    placeholder="Ej. 10,5"
+                                    {...form.register("initialStock")}
+                                    onBlur={(e) => {
+                                        form.setValue("initialStock", formatPriceDisplay(e.target.value))
+                                    }}
                                 />
                                 {form.formState.errors.initialStock && (
                                     <p className="text-xs text-destructive">{form.formState.errors.initialStock.message}</p>
@@ -162,10 +164,11 @@ export function ActivateIngredientDialog({ open, onOpenChange }: ActivateIngredi
                                 <Label htmlFor="minStock">Min. Stock ({selectedIngredient.unitAbbreviation})</Label>
                                 <Input
                                     id="minStock"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    {...form.register("minStock", { valueAsNumber: true })}
+                                    placeholder="Ej. 2,0"
+                                    {...form.register("minStock")}
+                                    onBlur={(e) => {
+                                        form.setValue("minStock", formatPriceDisplay(e.target.value))
+                                    }}
                                 />
                                 {form.formState.errors.minStock && (
                                     <p className="text-xs text-destructive">{form.formState.errors.minStock.message}</p>

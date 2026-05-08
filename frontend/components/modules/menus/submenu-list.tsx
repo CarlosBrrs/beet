@@ -4,38 +4,9 @@ import { useState } from "react";
 import { SubmenuResponse } from "@/lib/api-types";
 import { SubmenuForm } from "./submenu-form";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit2, PackageOpen } from "lucide-react";
-
-function MockProducts({ submenuName }: { submenuName: string }) {
-    // Fake products just for visualizing the UI
-    const MOCK_PRODUCTS = [
-        { id: '1', name: `Product 1 (${submenuName})`, price: 15.99, template: "Standard Recipe" },
-        { id: '2', name: `Product 2 (${submenuName})`, price: 4.99, template: "Quick Item" },
-    ];
-
-    return (
-        <div className="mt-4 pt-4 border-t border-dashed">
-            <div className="flex justify-between items-center mb-3">
-                <h4 className="text-sm font-semibold flex items-center text-muted-foreground">
-                    <PackageOpen className="w-4 h-4 mr-2" />
-                    Assigned Products (Mock)
-                </h4>
-                <Button variant="outline" size="sm" className="h-7 text-xs">Add Product</Button>
-            </div>
-            <div className="space-y-2">
-                {MOCK_PRODUCTS.map(p => (
-                    <div key={p.id} className="flex justify-between items-center text-sm p-2 bg-muted/40 rounded">
-                        <div>
-                            <p className="font-medium text-foreground">{p.name}</p>
-                            <p className="text-xs text-muted-foreground">Template: {p.template}</p>
-                        </div>
-                        <p className="font-mono">${p.price.toFixed(2)}</p>
-                    </div>
-                ))}
-            </div>
-        </div>
-    )
-}
+import { Plus, Edit2, Eye } from "lucide-react";
+import Link from "next/link";
+import { useRestaurantContext } from "@/components/providers/restaurant-provider";
 
 interface SubmenuListProps {
     menuId: string;
@@ -45,6 +16,7 @@ interface SubmenuListProps {
 export function SubmenuList({ menuId, submenus }: SubmenuListProps) {
     const [editingSubmenu, setEditingSubmenu] = useState<SubmenuResponse | null>(null);
     const [isCreating, setIsCreating] = useState(false);
+    const { restaurantId } = useRestaurantContext();
 
     if (isCreating) {
         return (
@@ -99,11 +71,17 @@ export function SubmenuList({ menuId, submenus }: SubmenuListProps) {
                                         <p className="text-sm text-muted-foreground">{submenu.description}</p>
                                     )}
                                 </div>
-                                <Button variant="ghost" size="icon" onClick={() => setEditingSubmenu(submenu)}>
-                                    <Edit2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button variant="secondary" size="sm" asChild>
+                                        <Link href={`/restaurants/${restaurantId}/menus/${menuId}/submenus/${submenu.id}`}>
+                                            <Eye className="mr-2 h-4 w-4" /> Elementos
+                                        </Link>
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={() => setEditingSubmenu(submenu)}>
+                                        <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
-                            <MockProducts submenuName={submenu.name} />
                         </div>
                     ))}
                 </div>

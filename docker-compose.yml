@@ -7,6 +7,9 @@ services:
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
+    ports:
+      - "8080:8080"
+      - "5005:5005"
     depends_on:
       db:
         condition: service_healthy
@@ -23,6 +26,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    ports:
+      - "5432:5432"
 
 volumes:
   db_data:

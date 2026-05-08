@@ -126,7 +126,7 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort, Ingredi
                         baseWhere.append("  AND u.abbreviation IN (:units)\n");
                 }
 
-                String selectSql = "SELECT mi.id, mi.name, u.abbreviation AS unit_abbreviation, "
+                String selectSql = "SELECT mi.id, mi.name, mi.base_unit_id, u.abbreviation AS unit_abbreviation, "
                                 + "si.last_cost_base AS cost_per_base_unit "
                                 + baseWhere.toString()
                                 + " ORDER BY " + orderClause
@@ -168,6 +168,7 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort, Ingredi
                                 .query((rs, rowNum) -> new IngredientListResponse(
                                                 UUID.fromString(rs.getString("id")),
                                                 rs.getString("name"),
+                                                UUID.fromString(rs.getString("base_unit_id")),
                                                 rs.getString("unit_abbreviation"),
                                                 rs.getBigDecimal("cost_per_base_unit") // may be null if no supplier
                                 ))

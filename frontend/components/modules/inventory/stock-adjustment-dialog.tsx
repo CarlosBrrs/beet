@@ -16,6 +16,7 @@ import { toast } from "sonner"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { formatPriceDisplay, parsePriceInput } from "@/lib/formatters"
 
 const REASON_OPTIONS = [
     {
@@ -36,7 +37,7 @@ const REASON_OPTIONS = [
 ]
 
 const adjustSchema = z.object({
-    value: z.number({ message: "Required" }),
+    value: z.string().min(1, { message: "Required" }),
     reason: z.enum(["ADJUSTMENT", "WASTE", "CORRECTION"], { message: "Select a reason" }),
     notes: z.string().trim().optional(),
 })
@@ -58,16 +59,17 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
     const form = useForm<AdjustFormValues>({
         resolver: zodResolver(adjustSchema),
         mode: "onChange",
-        defaultValues: { value: 0, reason: undefined, notes: "" },
+        defaultValues: { value: "", reason: undefined, notes: "" },
     })
 
     const watchedValue = form.watch("value")
 
     // Compute what the resulting stock would be
     const previewStock = useMemo(() => {
-        if (!stock || watchedValue === undefined || isNaN(watchedValue)) return null
-        if (mode === "REPLACE") return watchedValue
-        return stock.currentStock + watchedValue
+        const numericVal = parsePriceInput(watchedValue || "0")
+        if (!stock || isNaN(numericVal)) return null
+        if (mode === "REPLACE") return numericVal
+        return stock.currentStock + numericVal
     }, [stock, watchedValue, mode])
 
     const handleSubmit = (values: AdjustFormValues) => {
@@ -78,7 +80,7 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
                 stockId: stock.id,
                 payload: {
                     mode,
-                    value: values.value,
+                    value: parsePriceInput(values.value),
                     reason: values.reason,
                     notes: values.notes || undefined,
                 },
@@ -117,7 +119,7 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
                 <Tabs value={mode} onValueChange={(v) => {
                     setMode(v as "REPLACE" | "DELTA")
-                    form.setValue("value", 0, { shouldValidate: true })
+                    form.setValue("value", "", { shouldValidate: true })
                 }}>
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="DELTA">Add / Remove</TabsTrigger>
@@ -129,10 +131,11 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
                             <Label htmlFor="delta-value">Delta ({stock.unitAbbreviation})</Label>
                             <Input
                                 id="delta-value"
-                                type="number"
-                                step="0.01"
-                                placeholder="e.g. -5 to remove, +10 to add"
-                                {...form.register("value", { valueAsNumber: true })}
+                                placeholder="Ej. -5 para restar, 10 para sumar"
+                                {...form.register("value")}
+                                onBlur={(e) => {
+                                    form.setValue("value", formatPriceDisplay(e.target.value))
+                                }}
                             />
                             <p className="text-xs text-muted-foreground">
                                 Use negative values to remove stock, positive to add.
@@ -145,11 +148,11 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
                             <Label htmlFor="replace-value">New Stock ({stock.unitAbbreviation})</Label>
                             <Input
                                 id="replace-value"
-                                type="number"
-                                step="0.01"
-                                min="0"
                                 placeholder="e.g. 100"
-                                {...form.register("value", { valueAsNumber: true })}
+                                {...form.register("value")}
+                                onBlur={(e) => {
+                                    form.setValue("value", formatPriceDisplay(e.target.value))
+                                }}
                             />
                         </div>
                     </TabsContent>

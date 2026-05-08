@@ -76,7 +76,19 @@ export const navigationConfig: NavItem[] = [
                 href: "/menus",
                 icon: FileText,
                 module: PermissionModule.MENUS,
-            }
+            },
+            {
+                title: "Preparaciones",
+                href: "/preparations",
+                icon: ChefHat,
+                module: PermissionModule.PREPARATIONS,
+            },
+            {
+                title: "Productos",
+                href: "/products",
+                icon: Package,
+                module: PermissionModule.PRODUCTS,
+            },
         ]
     },
     {

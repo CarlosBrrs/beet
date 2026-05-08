@@ -226,6 +226,7 @@ export interface IngredientResponse {
 export interface IngredientListResponse {
     id: string;
     name: string;
+    baseUnitId: string;
     unitAbbreviation: string;
     costPerBaseUnit: number | null;
 }
@@ -415,3 +416,146 @@ export interface UpdateSubmenuRequest {
     description?: string;
     sortOrder?: number;
 }
+
+// ── Items — Preparations (Layer 1) & Products (Layer 2) ──
+
+export type ItemClass = "PREPARATION" | "SALEABLE_PRODUCT";
+export type RecipeLineSource = "INGREDIENT" | "PREPARATION";
+
+export interface RecipeLineResponse {
+    id: string;
+    source: RecipeLineSource;
+    masterIngredientId: string | null;
+    childItemId: string | null;
+    quantity: number;
+    unitId: string;
+    sortOrder: number;
+}
+
+export interface ItemResponse {
+    id: string;
+    restaurantId: string;
+    itemClass: ItemClass;
+    name: string;
+    description: string | null;
+    isInventoryTracked: boolean;
+    yieldQty: number | null;
+    yieldUnitId: string | null;
+    salePrice: number | null;
+    theoreticalCost: number | null;
+    recipeLines: RecipeLineResponse[];
+    createdAt: string;
+    updatedAt: string;
+}
+
+// Preparation recipe lines: only master ingredients (no nesting allowed)
+export interface RecipeLineRequest {
+    masterIngredientId: string;
+    quantity: number;
+    unitId: string;
+}
+
+// Product recipe lines: can reference ingredients OR preparations
+export interface ProductRecipeLineRequest {
+    source: RecipeLineSource;
+    masterIngredientId?: string;   // when source = INGREDIENT
+    childItemId?: string;          // when source = PREPARATION
+    quantity: number;
+    unitId: string;
+}
+
+export interface CreatePreparationRequest {
+    name: string;
+    description?: string;
+    yieldQty: number;
+    yieldUnitId: string;
+    lines: RecipeLineRequest[];
+}
+
+export interface CreateProductRequest {
+    name: string;
+    description?: string;
+    salePrice: number;
+    isInventoryTracked: boolean;
+    userDefinedCost?: number;              // Only for flat products
+    lines?: ProductRecipeLineRequest[];    // Only for products with recipe
+    yieldQty?: number;
+    yieldUnitId?: string;
+}
+
+export interface UpdateItemRequest {
+    name?: string;
+    description?: string;
+    salePrice?: number;
+    yieldQty?: number;
+    yieldUnitId?: string;
+    userDefinedCost?: number;
+    lines?: ProductRecipeLineRequest[];
+}
+
+// ── Templates (Layer 3) ──
+
+export interface SlotOptionRequest {
+    itemId: string;
+    surcharge?: number;
+    isDefault?: boolean;
+    sortOrder?: number;
+}
+
+export interface SlotRequest {
+    name: string;
+    minSelection: number;
+    maxSelection: number;
+    sortOrder?: number;
+    options: SlotOptionRequest[];
+}
+
+export interface CreateTemplateRequest {
+    name: string;
+    description?: string;
+    basePrice: number;
+    slots: SlotRequest[];
+}
+
+export interface SlotOptionResponse {
+    id: string;
+    itemId: string;
+    surcharge: number;
+    isDefault: boolean;
+    sortOrder: number;
+}
+
+export interface SlotResponse {
+    id: string;
+    name: string;
+    minSelection: number;
+    maxSelection: number;
+    sortOrder: number;
+    options: SlotOptionResponse[];
+}
+
+export interface TemplateResponse {
+    id: string;
+    restaurantId: string;
+    name: string;
+    description: string | null;
+    basePrice: number;
+    slots: SlotResponse[];
+    createdAt: string;
+    updatedAt: string;
+}
+
+export type SubmenuNodeType = "PRODUCT" | "TEMPLATE";
+
+export interface SubmenuNodeResponse {
+    id: string;
+    submenuId: string;
+    nodeType: SubmenuNodeType;
+    itemId: string | null;
+    templateId: string | null;
+    sortOrder: number;
+    // Expanded data for UI convenience depending on the type
+    item?: ItemResponse;
+    template?: TemplateResponse;
+}
+
