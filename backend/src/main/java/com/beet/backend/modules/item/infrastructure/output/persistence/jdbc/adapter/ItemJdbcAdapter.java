@@ -208,6 +208,14 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
                 .orElse(BigDecimal.ONE);
     }
 
+    @Override
+    public Optional<UUID> findUnitIdByAbbreviation(String abbreviation) {
+        return jdbcClient.sql("SELECT id FROM units WHERE abbreviation = :abbreviation")
+                .param("abbreviation", abbreviation)
+                .query((rs, rn) -> rs.getObject("id", UUID.class))
+                .optional();
+    }
+
     /**
      * Returns last_cost_base for a master_ingredient. Falls back to 0 if not yet
      * set.

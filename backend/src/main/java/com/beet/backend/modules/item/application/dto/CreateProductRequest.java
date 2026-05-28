@@ -26,12 +26,12 @@ public record CreateProductRequest(
         @NotNull(message = "isInventoryTracked is required") Boolean isInventoryTracked,
 
         // Only for flat products (isInventoryTracked=false)
-        @Digits(integer = 12, fraction = 4) BigDecimal userDefinedCost,
+        @PositiveOrZero(message = "User defined cost must be >= 0") @Digits(integer = 12, fraction = 4) BigDecimal userDefinedCost,
 
         // Required when isInventoryTracked=true
         @Valid List<RecipeLineRequest> lines,
 
         // Yield — relevant for tracked products; defaults to 1 pc
-        BigDecimal yieldQty,
+        @Positive(message = "Yield quantity must be positive") BigDecimal yieldQty,
         UUID yieldUnitId) {
 }

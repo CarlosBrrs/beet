@@ -21,12 +21,18 @@ export default function PurchasesPage() {
                     <h1 className="text-3xl font-bold">Purchases</h1>
                     <p className="text-muted-foreground">Register and track supplier invoices.</p>
                 </div>
-                <Can I="CREATE" a="INVOICES">
-                    <Button onClick={() => router.push(`/restaurants/${restaurantId}/purchases/register`)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Register Invoice
-                    </Button>
-                </Can>
+                <div className="flex flex-col items-end gap-1 text-right">
+                    <Can I="CREATE" a="INVOICES">
+                        <Button onClick={() => router.push(`/restaurants/${restaurantId}/purchases/register`)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Register Invoice
+                        </Button>
+                    </Can>
+                    <p className="text-xs text-muted-foreground max-w-xs">
+                        Registra facturas para actualizar costos y stock.
+                        Si un ingrediente no esta activo, se activa automaticamente.
+                    </p>
+                </div>
             </div>
 
             <PurchasesList onViewDetail={(id) => setDetailId(id)} />

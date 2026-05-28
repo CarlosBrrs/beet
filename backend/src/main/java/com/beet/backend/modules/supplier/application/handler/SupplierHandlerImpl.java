@@ -17,7 +17,6 @@ public class SupplierHandlerImpl implements SupplierHandler {
 
     @Override
     public ApiGenericResponse<List<SupplierResponse>> findAllActive(UUID ownerId) {
-        List<SupplierResponse> response = queryPort.findAllActiveByOwnerId(ownerId);
-        return ApiGenericResponse.success(response);
+        return ApiGenericResponse.success(queryPort.findAllActiveByOwnerId(ownerId));
     }
 }

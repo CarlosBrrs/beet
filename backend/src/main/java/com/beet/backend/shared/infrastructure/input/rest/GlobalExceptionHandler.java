@@ -5,6 +5,7 @@ import com.beet.backend.shared.domain.exception.ResourceAlreadyExistsException;
 import com.beet.backend.shared.domain.exception.ResourceNotFoundException;
 import com.beet.backend.shared.domain.exception.ResourceLimitExceededException;
 import com.beet.backend.modules.documenttype.domain.exception.InvalidDocumentTypeSearchException;
+import com.beet.backend.modules.item.domain.exception.ItemValidationException;
 import com.beet.backend.modules.ingredient.domain.exception.UnitTypeMismatchException;
 import com.beet.backend.modules.inventory.domain.exception.IngredientAlreadyActivatedException;
 import com.beet.backend.modules.inventory.domain.exception.IngredientOwnershipException;
@@ -74,6 +75,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiGenericResponse<Void> handleInvalidDocumentTypeSearch(
             InvalidDocumentTypeSearchException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(ItemValidationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiGenericResponse<Void> handleItemValidation(ItemValidationException ex) {
         return ApiGenericResponse.error(ex.getMessage());
     }
 

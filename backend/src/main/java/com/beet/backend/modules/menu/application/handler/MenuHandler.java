@@ -1,6 +1,5 @@
 package com.beet.backend.modules.menu.application.handler;
 
-import com.beet.backend.modules.item.application.dto.ItemResponse;
 import com.beet.backend.modules.menu.application.dto.*;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
 
@@ -18,5 +17,5 @@ public interface MenuHandler {
 
     ApiGenericResponse<SubmenuResponse> updateSubmenu(UUID submenuId, UpdateSubmenuRequest request);
 
-    ApiGenericResponse<List<ItemResponse>> getSubmenuNodes(UUID submenuId);
+    ApiGenericResponse<List<SubmenuNodeResponse>> getSubmenuNodes(UUID submenuId);
 }

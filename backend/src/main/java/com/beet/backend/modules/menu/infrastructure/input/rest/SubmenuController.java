@@ -5,6 +5,7 @@ import com.beet.backend.modules.item.application.dto.ItemResponse;
 import com.beet.backend.modules.item.application.dto.UpdateItemRequest;
 import com.beet.backend.modules.item.application.handler.ItemHandler;
 import com.beet.backend.modules.menu.application.dto.CreateSubmenuRequest;
+import com.beet.backend.modules.menu.application.dto.SubmenuNodeResponse;
 import com.beet.backend.modules.menu.application.dto.SubmenuResponse;
 import com.beet.backend.modules.menu.application.dto.UpdateSubmenuRequest;
 import com.beet.backend.modules.menu.application.handler.MenuHandler;
@@ -98,7 +99,7 @@ public class SubmenuController {
      */
     @GetMapping("/{submenuId}/nodes")
     @RequiresPermission(module = PermissionModule.MENUS, action = PermissionAction.VIEW)
-    public ResponseEntity<ApiGenericResponse<List<ItemResponse>>> getNodes(
+    public ResponseEntity<ApiGenericResponse<List<SubmenuNodeResponse>>> getNodes(
             @PathVariable UUID restaurantId,
             @PathVariable UUID menuId,
             @PathVariable UUID submenuId) {

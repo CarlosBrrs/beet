@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMenus } from "@/lib/hooks/use-menus";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Edit2, Loader2, ListTree, ChevronDown, PackageOpen } from "lucide-react";
+import { Edit2, Loader2, ListTree, ChevronDown, ArrowRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { MenuResponse } from "@/lib/api-types";
@@ -95,23 +96,12 @@ function MenuCard({ menu, onEditMenu }: { menu: MenuResponse, onEditMenu: (id: s
                         {submenus.map(sub => (
                             <div key={sub.id} className="border rounded-md p-3 bg-muted/10 shadow-sm">
                                 <h5 className="font-semibold text-sm mb-2 text-foreground tracking-tight">{sub.name}</h5>
-                                {/* Mock Products for this submenu */}
-                                <div className="space-y-1.5">
-                                    <div className="flex justify-between items-center text-xs p-2 bg-background rounded border group/item hover:bg-accent/50 transition-colors">
-                                        <div className="flex items-center text-muted-foreground truncate mr-2">
-                                            <PackageOpen className="w-3.5 h-3.5 mr-2 shrink-0 text-muted-foreground/70 group-hover/item:text-primary transition-colors" />
-                                            <span className="truncate">Product 1 ({sub.name})</span>
-                                        </div>
-                                        <span className="font-mono text-muted-foreground shrink-0">$15.99</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-xs p-2 bg-background rounded border group/item hover:bg-accent/50 transition-colors">
-                                        <div className="flex items-center text-muted-foreground truncate mr-2">
-                                            <PackageOpen className="w-3.5 h-3.5 mr-2 shrink-0 text-muted-foreground/70 group-hover/item:text-primary transition-colors" />
-                                            <span className="truncate">Product 2 ({sub.name})</span>
-                                        </div>
-                                        <span className="font-mono text-muted-foreground shrink-0">$4.99</span>
-                                    </div>
-                                </div>
+                                <Button asChild variant="outline" size="sm" className="h-8 w-full justify-between text-xs">
+                                    <Link href={`/restaurants/${menu.restaurantId}/menus/${menu.id}/submenus/${sub.id}`}>
+                                        Gestionar elementos
+                                        <ArrowRight className="h-3.5 w-3.5" />
+                                    </Link>
+                                </Button>
                             </div>
                         ))}
                     </CollapsibleContent>

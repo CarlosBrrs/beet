@@ -8,7 +8,6 @@ import com.beet.backend.shared.infrastructure.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -71,9 +70,9 @@ public class ItemHandlerImpl implements ItemHandler {
                 .isInventoryTracked(tracked)
                 .salePrice(request.salePrice())
                 .theoreticalCost(tracked ? null : request.userDefinedCost())
-                .yieldQty(request.yieldQty() != null ? request.yieldQty() : BigDecimal.ONE)
+                .yieldQty(request.yieldQty())
                 .yieldUnitId(request.yieldUnitId())
-                .recipeLines(tracked && request.lines() != null ? toRecipeLineDomains(request.lines()) : List.of())
+                .recipeLines(toRecipeLineDomains(request.lines()))
                 .createdBy(SecurityUtils.getAuthenticatedUserId())
                 .updatedBy(SecurityUtils.getAuthenticatedUserId())
                 .build();

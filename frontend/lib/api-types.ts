@@ -554,8 +554,7 @@ export interface SubmenuNodeResponse {
     itemId: string | null;
     templateId: string | null;
     sortOrder: number;
-    // Expanded data for UI convenience depending on the type
-    item?: ItemResponse;
-    template?: TemplateResponse;
+    item: ItemResponse | null;
+    template: TemplateResponse | null;
 }
 

@@ -3,6 +3,7 @@ package com.beet.backend.modules.item.domain.usecase;
 import com.beet.backend.modules.item.domain.api.ItemServicePort;
 import com.beet.backend.modules.item.domain.exception.ItemAlreadyExistsException;
 import com.beet.backend.modules.item.domain.exception.ItemNotFoundException;
+import com.beet.backend.modules.item.domain.exception.ItemValidationException;
 import com.beet.backend.modules.item.domain.model.ItemClass;
 import com.beet.backend.modules.item.domain.model.ItemDomain;
 import com.beet.backend.modules.item.domain.model.RecipeLineDomain;
@@ -46,9 +47,8 @@ public class ItemUseCase implements ItemServicePort {
     @Transactional
     public ItemDomain createProduct(UUID submenuId, ItemDomain item) {
         guardDuplicateName(item.getName(), item.getRestaurantId());
-        if (item.isInventoryTracked()) {
-            validateNoCycles(item.getRecipeLines(), null);
-        }
+        prepareProductForCreate(item);
+
         ItemDomain saved = itemPersistencePort.save(item);
         itemPersistencePort.saveSubmenuNode(submenuId, saved.getId());
 
@@ -128,6 +128,34 @@ public class ItemUseCase implements ItemServicePort {
     private void guardDuplicateName(String name, UUID restaurantId) {
         if (itemPersistencePort.existsByNameAndRestaurant(name, restaurantId)) {
             throw ItemAlreadyExistsException.forName(name);
+        }
+    }
+
+    private void prepareProductForCreate(ItemDomain item) {
+        if (item.isInventoryTracked()) {
+            if (item.getRecipeLines() == null || item.getRecipeLines().isEmpty()) {
+                throw ItemValidationException.trackedProductRequiresRecipe();
+            }
+            if (item.getYieldQty() == null || item.getYieldUnitId() == null) {
+                throw ItemValidationException.trackedProductRequiresYield();
+            }
+            validateNoCycles(item.getRecipeLines(), null);
+            return;
+        }
+
+        if (item.getRecipeLines() != null && !item.getRecipeLines().isEmpty()) {
+            throw ItemValidationException.flatProductCannotHaveRecipe();
+        }
+        item.setRecipeLines(List.of());
+        if (item.getYieldQty() == null) {
+            item.setYieldQty(BigDecimal.ONE);
+        }
+        if (item.getYieldUnitId() == null) {
+            item.setYieldUnitId(itemPersistencePort.findUnitIdByAbbreviation("pcs")
+                    .orElseThrow(() -> ItemValidationException.defaultUnitNotFound("pcs")));
+        }
+        if (item.getTheoreticalCost() == null) {
+            item.setTheoreticalCost(BigDecimal.ZERO);
         }
     }
 

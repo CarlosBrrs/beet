@@ -7,9 +7,14 @@ import {
     SubmenuNodeResponse,
     ItemResponse,
     UpdateItemRequest,
+    TemplateResponse,
 } from "@/lib/api-types";
 import { useRestaurantContext } from "@/components/providers/restaurant-provider";
 import { toast } from "sonner";
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+}
 
 // ── Query Keys ──
 export const submenuNodeKeys = {
@@ -28,22 +33,12 @@ export function useSubmenuNodes(menuId: string, submenuId: string) {
     return useQuery({
         queryKey: submenuNodeKeys.list(restaurantId, menuId, submenuId),
         queryFn: async () => {
-            // Note: Currently backend `getSubmenuNodes` returns `List<ItemResponse>`.
-            // We map this raw array into the polymorphic `SubmenuNodeResponse` expected by the UI.
-            const data = await apiClient<ApiGenericResponse<any[]>>(
+            const data = await apiClient<ApiGenericResponse<SubmenuNodeResponse[]>>(
                 `/restaurants/${restaurantId}/menus/${menuId}/submenus/${submenuId}/nodes`,
                 { method: "GET" }
             );
-            
-            return data.data.map((item: any) => ({
-                id: item.id,
-                submenuId: submenuId,
-                nodeType: "PRODUCT" as const,
-                itemId: item.id,
-                templateId: null,
-                sortOrder: 0, // Fallback until backend supports ordering
-                item: item
-            })) as SubmenuNodeResponse[];
+
+            return data.data;
         },
         enabled: !!restaurantId && !!menuId && !!submenuId,
     });
@@ -71,7 +66,7 @@ export function useCreateSubmenuProduct(menuId: string, submenuId: string) {
 
     return useMutation({
         mutationFn: async (payload: CreateProductRequest) => {
-            const data = await apiClient<ApiGenericResponse<SubmenuNodeResponse>>(
+            const data = await apiClient<ApiGenericResponse<ItemResponse>>(
                 `/restaurants/${restaurantId}/menus/${menuId}/submenus/${submenuId}/products`,
                 { method: "POST", body: JSON.stringify(payload) }
             );
@@ -83,8 +78,8 @@ export function useCreateSubmenuProduct(menuId: string, submenuId: string) {
             });
             toast.success("Producto creado exitosamente");
         },
-        onError: (error: any) => {
-            toast.error(error.message || "Error al crear producto");
+        onError: (error: unknown) => {
+            toast.error(getErrorMessage(error, "Error al crear producto"));
         },
     });
 }
@@ -94,7 +89,7 @@ export function useUpdateSubmenuProduct(menuId: string, submenuId: string, produ
     const { restaurantId } = useRestaurantContext();
 
     return useMutation({
-        mutationFn: async (payload: import("@/lib/api-types").UpdateItemRequest) => {
+        mutationFn: async (payload: UpdateItemRequest) => {
             const data = await apiClient<ApiGenericResponse<ItemResponse>>(
                 `/restaurants/${restaurantId}/menus/${menuId}/submenus/${submenuId}/products/${productId}`,
                 { method: "PUT", body: JSON.stringify(payload) }
@@ -110,8 +105,8 @@ export function useUpdateSubmenuProduct(menuId: string, submenuId: string, produ
             });
             toast.success("Producto actualizado exitosamente");
         },
-        onError: (error: any) => {
-            toast.error(error.message || "Error al actualizar producto");
+        onError: (error: unknown) => {
+            toast.error(getErrorMessage(error, "Error al actualizar producto"));
         },
     });
 }
@@ -122,7 +117,7 @@ export function useCreateSubmenuTemplate(menuId: string, submenuId: string) {
 
     return useMutation({
         mutationFn: async (payload: CreateTemplateRequest) => {
-            const data = await apiClient<ApiGenericResponse<SubmenuNodeResponse>>(
+            const data = await apiClient<ApiGenericResponse<TemplateResponse>>(
                 `/restaurants/${restaurantId}/menus/${menuId}/submenus/${submenuId}/templates`,
                 { method: "POST", body: JSON.stringify(payload) }
             );
@@ -134,8 +129,8 @@ export function useCreateSubmenuTemplate(menuId: string, submenuId: string) {
             });
             toast.success("Plantilla creada exitosamente");
         },
-        onError: (error: any) => {
-            toast.error(error.message || "Error al crear plantilla");
+        onError: (error: unknown) => {
+            toast.error(getErrorMessage(error, "Error al crear plantilla"));
         },
     });
 }
@@ -157,8 +152,8 @@ export function useDeleteSubmenuNode(menuId: string, submenuId: string) {
             });
             toast.success("Elemento removido del submenú");
         },
-        onError: (error: any) => {
-            toast.error(error.message || "Error al eliminar");
+        onError: (error: unknown) => {
+            toast.error(getErrorMessage(error, "Error al eliminar"));
         },
     });
 }

@@ -37,6 +37,8 @@ public interface ItemPersistencePort {
     // Returns factor_to_base (1 if it's already a base unit)
     java.math.BigDecimal getUnitFactorToBase(UUID unitId);
 
+    java.util.Optional<UUID> findUnitIdByAbbreviation(String abbreviation);
+
     // For cost calculation: retrieve last_cost_base for a master_ingredient
     java.math.BigDecimal getIngredientLastCostBase(UUID masterIngredientId);
 

@@ -1,9 +1,9 @@
 "use client"
 
 import { useSubmenuNodes, useDeleteSubmenuNode } from "@/lib/hooks/use-submenu-nodes"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, Plus, GripVertical, Settings2, Trash2, Box, Layers, Eye, Pencil } from "lucide-react"
+import { Loader2, Plus, GripVertical, Trash2, Box, Layers, Eye, Pencil } from "lucide-react"
 import { formatNumber } from "@/lib/formatters"
 import {
     DropdownMenu,
@@ -129,7 +129,10 @@ export function SubmenuNodeList({ menuId, submenuId, onAddProduct, onAddTemplate
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-8 w-8"
-                                                    onClick={() => onViewNode(node.id, node.nodeType)}
+                                                    onClick={() => {
+                                                        const targetId = isProduct ? node.itemId : node.templateId
+                                                        if (targetId) onViewNode(targetId, node.nodeType)
+                                                    }}
                                                 >
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
@@ -137,7 +140,10 @@ export function SubmenuNodeList({ menuId, submenuId, onAddProduct, onAddTemplate
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-8 w-8"
-                                                    onClick={() => onEditNode(node.id, node.nodeType)}
+                                                    onClick={() => {
+                                                        const targetId = isProduct ? node.itemId : node.templateId
+                                                        if (targetId) onEditNode(targetId, node.nodeType)
+                                                    }}
                                                 >
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>

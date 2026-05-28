@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SheetShell } from "@/components/shared/sheet-shell"
 import { ProductHubDetail } from "@/components/modules/products/product-hub-detail"
-import { Eye, Search, PackageSearch } from "lucide-react"
+import { Eye, Search, PackageSearch, Info } from "lucide-react"
 import { formatCurrency } from "@/lib/formatters"
 import { useDebounce } from "@/lib/hooks/use-debounce"
 
@@ -34,6 +34,25 @@ export default function ProductsPage() {
                 <p className="text-muted-foreground mt-1">
                     Vista general de todos los productos vendibles del restaurante.
                 </p>
+            </div>
+
+            <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="space-y-1">
+                    <p className="font-medium">Pendiente tecnico: respuesta enriquecida de productos</p>
+                    <p>
+                        Agregar unidades legibles para rendimiento y lineas de receta, mas costo unitario usado,
+                        costo total por linea y aporte por unidad vendible. Calcularlo en backend para lectura;
+                        guardar snapshots solo cuando existan ordenes.
+                    </p>
+                    <p className="font-medium mt-3">Pendiente tecnico: impuestos en ordenes</p>
+                    <p>
+                        TODO: Los impuestos de ordenes se derivaran de restaurant_taxes o del
+                        defaultTaxPercentage si no hay impuestos configurados. En MVP no hay
+                        desglose por item; a futuro se agregara order_item_taxes con snapshots por
+                        impuesto para mantener historial estable.
+                    </p>
+                </div>
             </div>
 
             {/* Search */}

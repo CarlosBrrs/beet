@@ -1,8 +1,11 @@
 package com.beet.backend.modules.menu.infrastructure.output.persistence.jdbc.adapter;
 
 import com.beet.backend.modules.menu.domain.model.MenuDomain;
+import com.beet.backend.modules.menu.domain.model.SubmenuNodeDomain;
+import com.beet.backend.modules.menu.domain.model.SubmenuNodeType;
 import com.beet.backend.modules.menu.domain.model.SubmenuDomain;
 import com.beet.backend.modules.menu.domain.spi.MenuPersistencePort;
+import com.beet.backend.modules.menu.domain.spi.SubmenuNodeQueryPort;
 import com.beet.backend.modules.menu.domain.spi.SubmenuPersistencePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -15,7 +18,7 @@ import java.util.*;
 
 @Repository
 @RequiredArgsConstructor
-public class MenuJdbcAdapter implements MenuPersistencePort, SubmenuPersistencePort {
+public class MenuJdbcAdapter implements MenuPersistencePort, SubmenuPersistencePort, SubmenuNodeQueryPort {
 
     private final JdbcClient jdbcClient;
 
@@ -170,6 +173,37 @@ public class MenuJdbcAdapter implements MenuPersistencePort, SubmenuPersistenceP
         return count != null && count > 0;
     }
 
+    // --- Submenu nodes ---
+
+    @Override
+    public List<SubmenuNodeDomain> findNodesBySubmenu(UUID submenuId) {
+        String sql = """
+                    SELECT id, submenu_id, node_type, item_id, template_id, sort_order
+                      FROM submenu_nodes
+                     WHERE submenu_id = :submenuId
+                     ORDER BY sort_order ASC, id ASC
+                """;
+
+        return jdbcClient.sql(sql)
+                .param("submenuId", submenuId)
+                .query(this::mapSubmenuNode)
+                .list();
+    }
+
+        @Override
+        public Optional<SubmenuNodeDomain> findNodeById(UUID nodeId) {
+                String sql = """
+                                        SELECT id, submenu_id, node_type, item_id, template_id, sort_order
+                                            FROM submenu_nodes
+                                         WHERE id = :nodeId
+                                """;
+
+                return jdbcClient.sql(sql)
+                                .param("nodeId", nodeId)
+                                .query(this::mapSubmenuNode)
+                                .optional();
+        }
+
     // --- Mappers ---
 
     private MenuDomain mapMenu(ResultSet rs, int rowNum) throws SQLException {
@@ -194,5 +228,15 @@ public class MenuJdbcAdapter implements MenuPersistencePort, SubmenuPersistenceP
                 .createdAt(rs.getObject("created_at", OffsetDateTime.class))
                 .updatedAt(rs.getObject("updated_at", OffsetDateTime.class))
                 .build();
+    }
+
+    private SubmenuNodeDomain mapSubmenuNode(ResultSet rs, int rowNum) throws SQLException {
+        return new SubmenuNodeDomain(
+                rs.getObject("id", UUID.class),
+                rs.getObject("submenu_id", UUID.class),
+                SubmenuNodeType.valueOf(rs.getString("node_type")),
+                rs.getObject("item_id", UUID.class),
+                rs.getObject("template_id", UUID.class),
+                rs.getInt("sort_order"));
     }
 }

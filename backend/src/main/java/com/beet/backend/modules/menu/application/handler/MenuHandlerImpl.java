@@ -2,13 +2,22 @@ package com.beet.backend.modules.menu.application.handler;
 
 import com.beet.backend.modules.item.application.dto.ItemResponse;
 import com.beet.backend.modules.item.application.dto.RecipeLineResponse;
+import com.beet.backend.modules.item.domain.exception.ItemNotFoundException;
+import com.beet.backend.modules.item.domain.model.ItemDomain;
 import com.beet.backend.modules.item.domain.model.RecipeLineDomain;
 import com.beet.backend.modules.item.domain.spi.ItemPersistencePort;
 import com.beet.backend.modules.menu.application.dto.*;
 import com.beet.backend.modules.menu.domain.api.MenuServicePort;
 import com.beet.backend.modules.menu.domain.model.MenuDomain;
+import com.beet.backend.modules.menu.domain.model.SubmenuNodeDomain;
+import com.beet.backend.modules.menu.domain.model.SubmenuNodeType;
 import com.beet.backend.modules.menu.domain.model.SubmenuDomain;
 import com.beet.backend.modules.menu.domain.spi.MenuPersistencePort;
+import com.beet.backend.modules.menu.domain.spi.SubmenuNodeQueryPort;
+import com.beet.backend.modules.template.application.dto.TemplateResponse;
+import com.beet.backend.modules.template.domain.exception.TemplateNotFoundException;
+import com.beet.backend.modules.template.domain.model.TemplateDomain;
+import com.beet.backend.modules.template.domain.spi.TemplatePersistencePort;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,7 +32,9 @@ public class MenuHandlerImpl implements MenuHandler {
 
         private final MenuServicePort menuServicePort;
         private final MenuPersistencePort menuPersistencePort;
+        private final SubmenuNodeQueryPort submenuNodeQueryPort;
         private final ItemPersistencePort itemPersistencePort;
+        private final TemplatePersistencePort templatePersistencePort;
 
         @Override
         public ApiGenericResponse<MenuResponse> createMenu(UUID restaurantId, CreateMenuRequest request) {
@@ -79,25 +90,10 @@ public class MenuHandlerImpl implements MenuHandler {
         }
 
         @Override
-        public ApiGenericResponse<List<ItemResponse>> getSubmenuNodes(UUID submenuId) {
+        public ApiGenericResponse<List<SubmenuNodeResponse>> getSubmenuNodes(UUID submenuId) {
                 return ApiGenericResponse.success(
-                                itemPersistencePort.findItemsBySubmenu(submenuId).stream()
-                                                .map(item -> new ItemResponse(
-                                                                item.getId(),
-                                                                item.getRestaurantId(),
-                                                                item.getItemClass(),
-                                                                item.getName(),
-                                                                item.getDescription(),
-                                                                item.isInventoryTracked(),
-                                                                item.getYieldQty(),
-                                                                item.getYieldUnitId(),
-                                                                item.getSalePrice(),
-                                                                item.getTheoreticalCost(),
-                                                                item.getRecipeLines().stream()
-                                                                                .map(this::mapLineToResponse)
-                                                                                .collect(Collectors.toList()),
-                                                                item.getCreatedAt(),
-                                                                item.getUpdatedAt()))
+                                submenuNodeQueryPort.findNodesBySubmenu(submenuId).stream()
+                                                .map(this::mapToSubmenuNodeResponse)
                                                 .collect(Collectors.toList()));
         }
 
@@ -126,6 +122,80 @@ public class MenuHandlerImpl implements MenuHandler {
                                 domain.getSortOrder(),
                                 domain.getCreatedAt(),
                                 domain.getUpdatedAt());
+        }
+
+        private SubmenuNodeResponse mapToSubmenuNodeResponse(SubmenuNodeDomain node) {
+                ItemResponse item = null;
+                TemplateResponse template = null;
+
+                if (node.nodeType() == SubmenuNodeType.PRODUCT) {
+                        ItemDomain itemDomain = itemPersistencePort.findById(node.itemId())
+                                        .orElseThrow(() -> ItemNotFoundException.forId(node.itemId()));
+                        itemDomain.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(itemDomain.getId()));
+                        item = mapToItemResponse(itemDomain);
+                }
+
+                if (node.nodeType() == SubmenuNodeType.TEMPLATE) {
+                        TemplateDomain templateDomain = templatePersistencePort.findById(node.templateId())
+                                        .orElseThrow(() -> TemplateNotFoundException.forId(node.templateId()));
+                        template = mapToTemplateResponse(templateDomain);
+                }
+
+                return new SubmenuNodeResponse(
+                                node.id(),
+                                node.submenuId(),
+                                node.nodeType(),
+                                node.itemId(),
+                                node.templateId(),
+                                node.sortOrder(),
+                                item,
+                                template);
+        }
+
+        private ItemResponse mapToItemResponse(ItemDomain item) {
+                return new ItemResponse(
+                                item.getId(),
+                                item.getRestaurantId(),
+                                item.getItemClass(),
+                                item.getName(),
+                                item.getDescription(),
+                                item.isInventoryTracked(),
+                                item.getYieldQty(),
+                                item.getYieldUnitId(),
+                                item.getSalePrice(),
+                                item.getTheoreticalCost(),
+                                item.getRecipeLines().stream()
+                                                .map(this::mapLineToResponse)
+                                                .collect(Collectors.toList()),
+                                item.getCreatedAt(),
+                                item.getUpdatedAt());
+        }
+
+        private TemplateResponse mapToTemplateResponse(TemplateDomain template) {
+                return new TemplateResponse(
+                                template.getId(),
+                                template.getRestaurantId(),
+                                template.getName(),
+                                template.getDescription(),
+                                template.getBasePrice(),
+                                template.getSlots().stream()
+                                                .map(slot -> new TemplateResponse.SlotResponse(
+                                                                slot.getId(),
+                                                                slot.getName(),
+                                                                slot.getMinSelection(),
+                                                                slot.getMaxSelection(),
+                                                                slot.getSortOrder(),
+                                                                slot.getOptions().stream()
+                                                                                .map(option -> new TemplateResponse.SlotOptionResponse(
+                                                                                                option.getId(),
+                                                                                                option.getItemId(),
+                                                                                                option.getSurcharge(),
+                                                                                                option.isDefault(),
+                                                                                                option.getSortOrder()))
+                                                                                .collect(Collectors.toList())))
+                                                .collect(Collectors.toList()),
+                                template.getCreatedAt(),
+                                template.getUpdatedAt());
         }
 
         private RecipeLineResponse mapLineToResponse(RecipeLineDomain l) {

@@ -25,12 +25,18 @@ export default function InventoryPage() {
                     <h1 className="text-3xl font-bold">Inventory</h1>
                     <p className="text-muted-foreground">Manage your restaurant&apos;s ingredient stock levels.</p>
                 </div>
-                <Can I="ACTIVATE" a="INVENTORY">
-                    <Button onClick={() => setActivateOpen(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add from Catalog
-                    </Button>
-                </Can>
+                <div className="flex flex-col items-end gap-1 text-right">
+                    <Can I="ACTIVATE" a="INVENTORY">
+                        <Button onClick={() => setActivateOpen(true)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add from Catalog
+                        </Button>
+                    </Can>
+                    <p className="text-xs text-muted-foreground max-w-xs">
+                        Activa ingredientes del catalogo para este restaurante y define stock inicial.
+                        Para compras reales y costos, usa Purchases.
+                    </p>
+                </div>
             </div>
 
             <InventoryList

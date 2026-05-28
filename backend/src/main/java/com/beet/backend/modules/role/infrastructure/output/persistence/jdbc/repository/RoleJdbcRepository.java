@@ -13,7 +13,7 @@ import java.util.UUID;
 
 public interface RoleJdbcRepository extends ListCrudRepository<RoleAggregate, UUID> {
 
-        @Query("SELECT id FROM roles WHERE name = :name")
+        @Query("SELECT id FROM roles WHERE LOWER(name) = LOWER(:name)")
         Optional<UUID> findIdByName(String name);
 
         @Query("SELECT COUNT(*) > 0 FROM user_restaurant_roles WHERE user_id = :userId AND restaurant_id = :restaurantId AND role_id = :roleId")
