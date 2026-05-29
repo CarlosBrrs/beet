@@ -143,10 +143,10 @@ jobs:
             export PREV_FRONTEND_IMAGE=$(docker ps -q -f name=frontend | xargs -r docker inspect --format='{{.Config.Image}}')
             
             # Update specific branch tags (e.g. latest dev)
-            docker compose -f docker-compose.yml -f docker-compose.dev.yml pull
+            docker compose -f docker-compose.dev.yml pull
             
             # Redeploy
-            docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --remove-orphans
+            docker compose -f docker-compose.dev.yml up -d --remove-orphans
             
             echo "Waiting 25 seconds for services to boot and healthchecks to run..."
             sleep 25
@@ -155,7 +155,7 @@ jobs:
             if ! docker inspect --format='{{json .State.Health.Status}}' dev-backend-1 | grep -q "healthy"; then
               echo "Error: Backend failed healthcheck."
               echo "Initiating Rollback..."
-              docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+              docker compose -f docker-compose.dev.yml down
               
               # Re-run with previous images if they existed
               if [ ! -z "$PREV_BACKEND_IMAGE" ]; then
