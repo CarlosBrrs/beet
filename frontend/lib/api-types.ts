@@ -448,21 +448,17 @@ export interface ItemResponse {
     updatedAt: string;
 }
 
-// Preparation recipe lines: only master ingredients (no nesting allowed)
+// Recipe lines: include source for both preparations and products
 export interface RecipeLineRequest {
-    masterIngredientId: string;
-    quantity: number;
-    unitId: string;
-}
-
-// Product recipe lines: can reference ingredients OR preparations
-export interface ProductRecipeLineRequest {
     source: RecipeLineSource;
     masterIngredientId?: string;   // when source = INGREDIENT
     childItemId?: string;          // when source = PREPARATION
     quantity: number;
     unitId: string;
 }
+
+// Backward-compatible alias for product-specific usages
+export type ProductRecipeLineRequest = RecipeLineRequest;
 
 export interface CreatePreparationRequest {
     name: string;
@@ -478,7 +474,7 @@ export interface CreateProductRequest {
     salePrice: number;
     isInventoryTracked: boolean;
     userDefinedCost?: number;              // Only for flat products
-    lines?: ProductRecipeLineRequest[];    // Only for products with recipe
+    lines?: RecipeLineRequest[];           // Only for products with recipe
     yieldQty?: number;
     yieldUnitId?: string;
 }
@@ -490,7 +486,7 @@ export interface UpdateItemRequest {
     yieldQty?: number;
     yieldUnitId?: string;
     userDefinedCost?: number;
-    lines?: ProductRecipeLineRequest[];
+    lines?: RecipeLineRequest[];
 }
 
 // ── Templates (Layer 3) ──

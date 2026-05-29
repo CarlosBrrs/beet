@@ -25,7 +25,7 @@ import {
 import { Check, ChevronsUpDown, Loader2, Plus, Trash2 } from "lucide-react";
 import { useCreatePreparation, useUpdateItem } from "@/lib/hooks/use-items";
 import { useUnits } from "@/lib/hooks/use-units";
-import { ItemResponse } from "@/lib/api-types";
+import { ItemResponse, RecipeLineRequest, RecipeLineSource } from "@/lib/api-types";
 import { parsePriceInput, formatPriceDisplay } from "@/lib/formatters";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -177,7 +177,8 @@ export function PreparationForm({ initialData, onSuccess }: PreparationFormProps
     const isPending = createPreparation.isPending || updateItem.isPending;
 
     const onSubmit = (values: PreparationFormValues) => {
-        const lines = values.lines.map((l) => ({
+        const lines: RecipeLineRequest[] = values.lines.map((l) => ({
+            source: "INGREDIENT" as RecipeLineSource,
             masterIngredientId: l.masterIngredientId,
             quantity: parsePriceInput(l.quantity),
             unitId: l.unitId,
