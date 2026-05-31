@@ -14,7 +14,8 @@ import {
     LayoutGrid,
     User,
     CreditCard,
-    Package
+    Package,
+    CircleDollarSign
 } from "lucide-react"
 import { PermissionModule } from "@/lib/permissions"
 
@@ -48,6 +49,35 @@ export const navigationConfig: NavItem[] = [
                 icon: FileText,
                 module: PermissionModule.INVOICES,
             },
+            {
+                title: "Cash Registers",
+                href: "/cash-registers",
+                icon: CircleDollarSign,
+                module: PermissionModule.CASH,
+            },
+        ]
+    },
+    {
+        title: "Catalog",
+        items: [
+            {
+                title: "Menus",
+                href: "/menus",
+                icon: FileText,
+                module: PermissionModule.MENUS,
+            },
+            {
+                title: "Preparaciones",
+                href: "/preparations",
+                icon: ChefHat,
+                module: PermissionModule.PREPARATIONS,
+            },
+            {
+                title: "Productos",
+                href: "/products",
+                icon: Package,
+                module: PermissionModule.PRODUCTS,
+            },
         ]
     },
     {
@@ -70,24 +100,6 @@ export const navigationConfig: NavItem[] = [
                 href: "/orders/active",
                 icon: Utensils,
                 module: PermissionModule.KDS,
-            },
-            {
-                title: "Menus",
-                href: "/menus",
-                icon: FileText,
-                module: PermissionModule.MENUS,
-            },
-            {
-                title: "Preparaciones",
-                href: "/preparations",
-                icon: ChefHat,
-                module: PermissionModule.PREPARATIONS,
-            },
-            {
-                title: "Productos",
-                href: "/products",
-                icon: Package,
-                module: PermissionModule.PRODUCTS,
             },
         ]
     },
@@ -150,6 +162,12 @@ export const accountNavigationConfig: NavItem[] = [
                 title: "Restaurants",
                 href: "/account/restaurants",
                 icon: Store,
+            },
+            {
+                title: "Cash Sessions",
+                href: "/account/cash-sessions",
+                icon: CircleDollarSign,
+                module: PermissionModule.CASH,
             }
         ]
     },

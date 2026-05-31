@@ -55,6 +55,9 @@ public class OrderUseCase implements OrderServicePort {
     @Transactional
     public OrderDomain createOrder(OrderDomain order, UUID userId) {
         RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
+        if (order.getCashSessionId() == null) {
+            throw new IllegalArgumentException("Order must be linked to an active cash session.");
+        }
         if (order.getItems() == null || order.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order must include at least one item.");
         }
@@ -100,8 +103,8 @@ public class OrderUseCase implements OrderServicePort {
 
     @Override
     @Transactional
-    public OrderDomain addItem(UUID orderId, OrderItemDomain item, UUID userId) {
-        OrderDomain order = loadOrder(orderId);
+    public OrderDomain addItem(UUID restaurantId, UUID orderId, OrderItemDomain item, UUID userId) {
+        OrderDomain order = loadOrder(restaurantId, orderId);
         RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
         TaxContext taxContext = resolveTaxContext(restaurant);
 
@@ -136,8 +139,9 @@ public class OrderUseCase implements OrderServicePort {
 
     @Override
     @Transactional
-    public OrderDomain updateItemQuantity(UUID orderId, UUID orderItemId, BigDecimal quantity, UUID userId) {
-        OrderDomain order = loadOrder(orderId);
+    public OrderDomain updateItemQuantity(
+            UUID restaurantId, UUID orderId, UUID orderItemId, BigDecimal quantity, UUID userId) {
+        OrderDomain order = loadOrder(restaurantId, orderId);
         RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
         TaxContext taxContext = resolveTaxContext(restaurant);
 
@@ -177,8 +181,8 @@ public class OrderUseCase implements OrderServicePort {
 
     @Override
     @Transactional
-    public OrderDomain removeItem(UUID orderId, UUID orderItemId, UUID userId) {
-        OrderDomain order = loadOrder(orderId);
+    public OrderDomain removeItem(UUID restaurantId, UUID orderId, UUID orderItemId, UUID userId) {
+        OrderDomain order = loadOrder(restaurantId, orderId);
         RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
         TaxContext taxContext = resolveTaxContext(restaurant);
 
@@ -211,8 +215,9 @@ public class OrderUseCase implements OrderServicePort {
     }
 
     @Override
-    public java.util.Optional<OrderDomain> findById(UUID orderId) {
-        return orderPersistence.findByIdWithItems(orderId);
+    public java.util.Optional<OrderDomain> findById(UUID restaurantId, UUID orderId) {
+        return orderPersistence.findByIdWithItems(orderId)
+                .filter(order -> restaurantId.equals(order.getRestaurantId()));
     }
 
     @Override
@@ -225,8 +230,8 @@ public class OrderUseCase implements OrderServicePort {
                 .orElseThrow(() -> RestaurantNotFoundException.forId(restaurantId));
     }
 
-    private OrderDomain loadOrder(UUID orderId) {
-        return orderPersistence.findByIdWithItems(orderId)
+    private OrderDomain loadOrder(UUID restaurantId, UUID orderId) {
+        return findById(restaurantId, orderId)
                 .orElseThrow(() -> OrderNotFoundException.forId(orderId));
     }
 

@@ -1,5 +1,9 @@
 package com.beet.backend.modules.order.application.handler;
 
+import com.beet.backend.modules.cash.domain.api.CashSessionQueryPort;
+import com.beet.backend.modules.cash.domain.exception.CashSessionNotFoundException;
+import com.beet.backend.modules.cash.domain.exception.CashSessionRequiredException;
+import com.beet.backend.modules.cash.domain.model.CashSessionDomain;
 import com.beet.backend.modules.order.application.dto.AddOrderItemRequest;
 import com.beet.backend.modules.order.application.dto.OrderCreateRequest;
 import com.beet.backend.modules.order.application.dto.OrderDetailResponse;
@@ -13,6 +17,7 @@ import com.beet.backend.modules.order.domain.model.OrderItemTaxDomain;
 import com.beet.backend.modules.order.domain.model.OrderTaxDomain;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
 import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
+import com.beet.backend.shared.infrastructure.security.DeviceContext;
 import com.beet.backend.shared.infrastructure.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,12 +30,22 @@ import java.util.UUID;
 public class OrderHandlerImpl implements OrderHandler {
 
     private final OrderServicePort orderService;
+    private final CashSessionQueryPort cashSessionQuery;
+    private final DeviceContext deviceContext;
 
     @Override
     public ApiGenericResponse<OrderDetailResponse> create(UUID restaurantId, OrderCreateRequest request) {
         UUID userId = SecurityUtils.getAuthenticatedUserId();
+        UUID deviceId = deviceContext.getDeviceId();
+        CashSessionDomain cashSession;
+        try {
+            cashSession = cashSessionQuery.getActiveSession(restaurantId, deviceId);
+        } catch (CashSessionNotFoundException exception) {
+            throw CashSessionRequiredException.forDevice(deviceId);
+        }
         OrderDomain order = OrderDomain.builder()
                 .restaurantId(restaurantId)
+                .cashSessionId(cashSession.getId())
                 .serviceType(request.serviceType())
                 .tableId(request.tableId())
                 .customerName(request.customerName())
@@ -53,7 +68,7 @@ public class OrderHandlerImpl implements OrderHandler {
                 .unitPriceSnapshot(request.unitPrice())
                 .build();
 
-        OrderDomain updated = orderService.addItem(orderId, item, userId);
+        OrderDomain updated = orderService.addItem(restaurantId, orderId, item, userId);
         return ApiGenericResponse.success(toDetailResponse(updated));
     }
 
@@ -61,20 +76,21 @@ public class OrderHandlerImpl implements OrderHandler {
     public ApiGenericResponse<OrderDetailResponse> updateItemQuantity(UUID restaurantId, UUID orderId,
             UUID orderItemId, OrderItemQuantityRequest request) {
         UUID userId = SecurityUtils.getAuthenticatedUserId();
-        OrderDomain updated = orderService.updateItemQuantity(orderId, orderItemId, request.quantity(), userId);
+        OrderDomain updated = orderService.updateItemQuantity(
+                restaurantId, orderId, orderItemId, request.quantity(), userId);
         return ApiGenericResponse.success(toDetailResponse(updated));
     }
 
     @Override
     public ApiGenericResponse<OrderDetailResponse> removeItem(UUID restaurantId, UUID orderId, UUID orderItemId) {
         UUID userId = SecurityUtils.getAuthenticatedUserId();
-        OrderDomain updated = orderService.removeItem(orderId, orderItemId, userId);
+        OrderDomain updated = orderService.removeItem(restaurantId, orderId, orderItemId, userId);
         return ApiGenericResponse.success(toDetailResponse(updated));
     }
 
     @Override
     public ApiGenericResponse<OrderDetailResponse> getById(UUID restaurantId, UUID orderId) {
-        OrderDomain found = orderService.findById(orderId)
+        OrderDomain found = orderService.findById(restaurantId, orderId)
                 .orElseThrow(() -> OrderNotFoundException.forId(orderId));
         return ApiGenericResponse.success(toDetailResponse(found));
     }
@@ -106,6 +122,7 @@ public class OrderHandlerImpl implements OrderHandler {
         return new OrderResponse(
                 order.getId(),
                 order.getRestaurantId(),
+                order.getCashSessionId(),
                 order.getOrderStatus(),
                 order.getKitchenStatus(),
                 order.getPaymentStatus(),
@@ -130,6 +147,7 @@ public class OrderHandlerImpl implements OrderHandler {
         return new OrderDetailResponse(
                 order.getId(),
                 order.getRestaurantId(),
+                order.getCashSessionId(),
                 order.getOrderStatus(),
                 order.getKitchenStatus(),
                 order.getPaymentStatus(),

@@ -40,12 +40,12 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderTaxQueryPort
 
         String sql = """
                 INSERT INTO orders
-                    (id, restaurant_id, order_status, kitchen_status, payment_status,
+                    (id, restaurant_id, cash_session_id, order_status, kitchen_status, payment_status,
                      service_type, table_id, customer_name, prepayment_required_snapshot,
                      tax_rate_snapshot, subtotal_gross_snapshot, tax_amount_snapshot, total_gross_snapshot,
                      notes, created_by, updated_by)
                 VALUES
-                    (:id, :restaurantId, :orderStatus::order_status, :kitchenStatus::kitchen_status, :paymentStatus::payment_status,
+                    (:id, :restaurantId, :cashSessionId, :orderStatus::order_status, :kitchenStatus::kitchen_status, :paymentStatus::payment_status,
                      :serviceType::service_type, :tableId, :customerName, :prepaymentRequired,
                      :taxRate, :subtotalGross, :taxAmount, :totalGross,
                      :notes, :createdBy, :updatedBy)
@@ -55,6 +55,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderTaxQueryPort
         OrderDomain saved = jdbc.sql(sql)
                 .param("id", orderId)
                 .param("restaurantId", order.getRestaurantId())
+                .param("cashSessionId", order.getCashSessionId())
                 .param("orderStatus", order.getOrderStatus().name())
                 .param("kitchenStatus", order.getKitchenStatus().name())
                 .param("paymentStatus", order.getPaymentStatus().name())
@@ -363,6 +364,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderTaxQueryPort
         return OrderDomain.builder()
                 .id(rs.getObject("id", UUID.class))
                 .restaurantId(rs.getObject("restaurant_id", UUID.class))
+                .cashSessionId(rs.getObject("cash_session_id", UUID.class))
                 .orderStatus(OrderStatus.valueOf(rs.getString("order_status")))
                 .kitchenStatus(KitchenStatus.valueOf(rs.getString("kitchen_status")))
                 .paymentStatus(PaymentStatus.valueOf(rs.getString("payment_status")))

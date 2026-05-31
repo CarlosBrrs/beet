@@ -12,6 +12,7 @@ import java.util.UUID;
 public record OrderResponse(
         UUID id,
         UUID restaurantId,
+        UUID cashSessionId,
         OrderStatus orderStatus,
         KitchenStatus kitchenStatus,
         PaymentStatus paymentStatus,

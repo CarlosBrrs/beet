@@ -143,6 +143,66 @@ export type RestaurantResponse = {
     role: string; // "Owner", "Manager", etc.
 }
 
+// Cash registers
+
+export interface CashRegisterResponse {
+    id: string;
+    restaurantId: string;
+    name: string;
+    deviceId: string | null;
+    isActive: boolean;
+    notes: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateCashRegisterRequest {
+    name: string;
+    deviceId?: string;
+    notes?: string;
+}
+
+export interface UpdateCashRegisterRequest {
+    name?: string;
+    deviceId?: string;
+    isActive?: boolean;
+    notes?: string;
+}
+
+export type CashSessionStatus = "OPEN" | "CLOSED";
+
+export interface CashSessionResponse {
+    id: string;
+    restaurantId: string;
+    cashRegisterId: string;
+    status: CashSessionStatus;
+    openedAt: string;
+    openedBy: string;
+    openedDeviceId: string;
+    openingAmount: number;
+    closedAt: string | null;
+    closedBy: string | null;
+    closedDeviceId: string | null;
+    closingAmount: number | null;
+    notes: string | null;
+}
+
+export interface OpenCashSessionRequest {
+    cashRegisterId: string;
+    openingAmount: number;
+    notes?: string;
+}
+
+export interface CloseCashSessionRequest {
+    closingAmount: number;
+    notes?: string;
+}
+
+export interface CashSessionListResponse extends CashSessionResponse {
+    restaurantName: string;
+    cashRegisterName: string;
+}
+
 // ── Mock Ingredient types (used by list, detail, delete, adjust — still mocked) ──
 
 export interface MockIngredient {

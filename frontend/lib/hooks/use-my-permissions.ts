@@ -50,31 +50,31 @@ export function useMyPermissions() {
     ): boolean => {
         if (!query.data) return false
 
-        let entry: UserPermissionEntry | undefined
+        const hasPermission = (entry?: UserPermissionEntry): boolean => {
+            if (!entry) return false
 
-        if (restaurantId !== undefined && restaurantId !== null) {
-            // Restaurant context: find the specific restaurant's role entry
-            entry = query.data.find(p => p.restaurantId === restaurantId)
-            // If no restaurant-specific role, fall back to global OWNER entry (owners access all)
-            if (!entry) {
-                entry = query.data.find(p => p.restaurantId === null)
-            }
-        } else {
-            // Account context (no restaurant selected): look for global owner entry
-            entry = query.data.find(p => p.restaurantId === null)
+            // OWNER wildcard: {"ALL": ["ALL"]} = full unrestricted access
+            // Note: "ALL" is a sentinel string, not in the PermissionModule enum by design.
+            const allActions = (entry.permissions as Record<string, string[]>)["ALL"]
+            if (allActions && allActions.includes("ALL")) return true
+
+            const actions = entry.permissions[moduleName as PermissionModule]
+            if (!actions) return false
+            if ((actions as string[]).includes("ALL")) return true
+            return actions.includes(action as PermissionAction)
         }
 
-        if (!entry) return false
+        const globalEntry = query.data.find(p => p.restaurantId === null)
+        if (hasPermission(globalEntry)) return true
 
-        // OWNER wildcard: {"ALL": ["ALL"]} = full unrestricted access
-        // Note: "ALL" is a sentinel string, not in the PermissionModule enum by design.
-        const allActions = (entry.permissions as Record<string, string[]>)["ALL"]
-        if (allActions && allActions.includes("ALL")) return true
+        if (restaurantId !== undefined && restaurantId !== null) {
+            return hasPermission(query.data.find(p => p.restaurantId === restaurantId))
+        }
 
-        const actions = entry.permissions[moduleName as PermissionModule]
-        if (!actions) return false
-        if ((actions as string[]).includes("ALL")) return true
-        return actions.includes(action as PermissionAction)
+        // Account context: allow modules available in at least one assigned restaurant.
+        return query.data
+            .filter(p => p.restaurantId !== null)
+            .some(hasPermission)
     }
 
     /**

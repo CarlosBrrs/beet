@@ -18,6 +18,7 @@ import java.util.UUID;
 public class OrderDomain {
     private UUID id;
     private UUID restaurantId;
+    private UUID cashSessionId;
     private OrderStatus orderStatus;
     private KitchenStatus kitchenStatus;
     private PaymentStatus paymentStatus;

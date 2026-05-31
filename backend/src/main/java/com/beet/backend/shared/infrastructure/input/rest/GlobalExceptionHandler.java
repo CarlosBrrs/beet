@@ -10,6 +10,7 @@ import com.beet.backend.modules.ingredient.domain.exception.UnitTypeMismatchExce
 import com.beet.backend.modules.inventory.domain.exception.IngredientAlreadyActivatedException;
 import com.beet.backend.modules.inventory.domain.exception.IngredientOwnershipException;
 import com.beet.backend.modules.inventory.domain.exception.IngredientStockNotFoundException;
+import com.beet.backend.modules.cash.domain.exception.CashSessionRequiredException;
 import com.beet.backend.modules.role.domain.exception.RoleConflictException;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -75,6 +76,18 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiGenericResponse<Void> handleInvalidDocumentTypeSearch(
             InvalidDocumentTypeSearchException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiGenericResponse<Void> handleIllegalArgument(IllegalArgumentException ex) {
+        return ApiGenericResponse.error(ex.getMessage());
+    }
+
+    @ExceptionHandler(CashSessionRequiredException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiGenericResponse<Void> handleCashSessionRequired(CashSessionRequiredException ex) {
         return ApiGenericResponse.error(ex.getMessage());
     }
 

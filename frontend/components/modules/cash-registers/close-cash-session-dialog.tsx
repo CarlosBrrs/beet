@@ -1,0 +1,113 @@
+"use client"
+
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Loader2 } from "lucide-react"
+import { useForm } from "react-hook-form"
+
+import { DialogShell } from "@/components/shared/dialog-shell"
+import { Button } from "@/components/ui/button"
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { CashSessionResponse } from "@/lib/api-types"
+import { formatPriceDisplay, parsePriceInput } from "@/lib/formatters"
+import { useCloseCashSession } from "@/lib/hooks/use-cash-sessions"
+
+import { closeCashSessionSchema, CloseCashSessionFormValues } from "./cash-session-schema"
+
+interface CloseCashSessionDialogProps {
+    session: CashSessionResponse
+    open: boolean
+    onOpenChange: (open: boolean) => void
+}
+
+export function CloseCashSessionDialog({ session, open, onOpenChange }: CloseCashSessionDialogProps) {
+    const closeSession = useCloseCashSession()
+    const form = useForm<CloseCashSessionFormValues>({
+        resolver: zodResolver(closeCashSessionSchema),
+        defaultValues: {
+            closingAmount: "",
+            notes: "",
+        },
+    })
+
+    const handleOpenChange = (isOpen: boolean) => {
+        if (!isOpen) form.reset()
+        onOpenChange(isOpen)
+    }
+
+    const handleSubmit = (values: CloseCashSessionFormValues) => {
+        closeSession.mutate(
+            {
+                sessionId: session.id,
+                request: {
+                    closingAmount: parsePriceInput(values.closingAmount),
+                    notes: values.notes.trim() || undefined,
+                },
+            },
+            { onSuccess: () => handleOpenChange(false) }
+        )
+    }
+
+    return (
+        <DialogShell
+            open={open}
+            onOpenChange={handleOpenChange}
+            title="Close cash session"
+        >
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                    <FormField
+                        control={form.control}
+                        name="closingAmount"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Closing amount</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        inputMode="decimal"
+                                        placeholder="0"
+                                        {...field}
+                                        onBlur={(event) => {
+                                            field.onBlur()
+                                            field.onChange(formatPriceDisplay(event.target.value))
+                                        }}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    <FormField
+                        control={form.control}
+                        name="notes"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Notes</FormLabel>
+                                <FormControl>
+                                    <Textarea placeholder="Optional notes" className="resize-none" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    <div className="flex justify-end pt-2">
+                        <Button type="submit" disabled={closeSession.isPending}>
+                            {closeSession.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                            Close session
+                        </Button>
+                    </div>
+                </form>
+            </Form>
+        </DialogShell>
+    )
+}

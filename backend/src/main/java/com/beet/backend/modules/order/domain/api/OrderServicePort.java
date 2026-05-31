@@ -12,13 +12,13 @@ public interface OrderServicePort {
 
     OrderDomain createOrder(OrderDomain order, UUID userId);
 
-    OrderDomain addItem(UUID orderId, OrderItemDomain item, UUID userId);
+    OrderDomain addItem(UUID restaurantId, UUID orderId, OrderItemDomain item, UUID userId);
 
-    OrderDomain updateItemQuantity(UUID orderId, UUID orderItemId, BigDecimal quantity, UUID userId);
+    OrderDomain updateItemQuantity(UUID restaurantId, UUID orderId, UUID orderItemId, BigDecimal quantity, UUID userId);
 
-    OrderDomain removeItem(UUID orderId, UUID orderItemId, UUID userId);
+    OrderDomain removeItem(UUID restaurantId, UUID orderId, UUID orderItemId, UUID userId);
 
-    Optional<OrderDomain> findById(UUID orderId);
+    Optional<OrderDomain> findById(UUID restaurantId, UUID orderId);
 
     PageResponse<OrderDomain> findAllPaged(UUID restaurantId, int page, int size, String search);
 }
