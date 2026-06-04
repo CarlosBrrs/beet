@@ -13,9 +13,10 @@ public interface CashRegisterPersistencePort {
 
     Optional<CashRegisterDomain> findRegisterById(UUID id);
 
+    Optional<CashRegisterDomain> findRegisterByIdForUpdate(UUID id);
+
     List<CashRegisterDomain> findByRestaurantId(UUID restaurantId);
 
     boolean existsByName(UUID restaurantId, String name);
 
-    boolean existsByDevice(UUID restaurantId, UUID deviceId);
 }

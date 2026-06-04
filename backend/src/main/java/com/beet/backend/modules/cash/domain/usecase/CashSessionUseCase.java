@@ -2,7 +2,6 @@ package com.beet.backend.modules.cash.domain.usecase;
 
 import com.beet.backend.modules.cash.domain.api.CashSessionQueryPort;
 import com.beet.backend.modules.cash.domain.api.CashSessionServicePort;
-import com.beet.backend.modules.cash.domain.exception.CashRegisterAlreadyExistsException;
 import com.beet.backend.modules.cash.domain.exception.CashRegisterNotFoundException;
 import com.beet.backend.modules.cash.domain.exception.CashSessionConflictException;
 import com.beet.backend.modules.cash.domain.exception.CashSessionNotFoundException;
@@ -73,37 +72,18 @@ public class CashSessionUseCase implements CashSessionServicePort, CashSessionQu
         if (!session.getOpenedDeviceId().equals(deviceId)) {
             throw new AccessDeniedException("Cash session belongs to another device");
         }
-        return close(sessionId, userId, deviceId, closingAmount, notes);
+        if (!session.getOpenedBy().equals(userId)) {
+            throw new AccessDeniedException("Cash session belongs to another user");
+        }
+        return closeAndRelease(session, userId, deviceId, closingAmount, notes);
     }
 
     @Override
     @Transactional
     public CashSessionDomain forceCloseSession(UUID restaurantId, UUID sessionId, UUID userId,
             UUID deviceId, BigDecimal closingAmount, String notes) {
-        loadOpenSession(restaurantId, sessionId);
-        return close(sessionId, userId, deviceId, closingAmount, notes);
-    }
-
-    @Override
-    @Transactional
-    public CashSessionDomain rebindSession(UUID restaurantId, UUID sessionId, UUID userId,
-            UUID newDeviceId) {
         CashSessionDomain session = loadOpenSession(restaurantId, sessionId);
-        if (sessionPersistencePort.findOpenByRestaurantAndDevice(restaurantId, newDeviceId)
-                .filter(existing -> !existing.getId().equals(sessionId))
-                .isPresent()) {
-            throw CashSessionConflictException.openDevice();
-        }
-
-        CashRegisterDomain register = loadRegister(restaurantId, session.getCashRegisterId());
-        if (registerPersistencePort.existsByDevice(restaurantId, newDeviceId)
-                && !newDeviceId.equals(register.getDeviceId())) {
-            throw CashRegisterAlreadyExistsException.forDevice(newDeviceId.toString());
-        }
-        register.setDeviceId(newDeviceId);
-        register.setUpdatedBy(userId);
-        registerPersistencePort.update(register);
-        return sessionPersistencePort.rebind(sessionId, newDeviceId);
+        return closeAndRelease(session, userId, deviceId, closingAmount, notes);
     }
 
     @Override
@@ -130,7 +110,7 @@ public class CashSessionUseCase implements CashSessionServicePort, CashSessionQu
     }
 
     private CashRegisterDomain loadRegister(UUID restaurantId, UUID cashRegisterId) {
-        CashRegisterDomain register = registerPersistencePort.findRegisterById(cashRegisterId)
+        CashRegisterDomain register = registerPersistencePort.findRegisterByIdForUpdate(cashRegisterId)
                 .orElseThrow(() -> CashRegisterNotFoundException.forId(cashRegisterId));
         if (!register.getRestaurantId().equals(restaurantId)) {
             throw new AccessDeniedException("Cash register does not belong to restaurant");
@@ -150,14 +130,19 @@ public class CashSessionUseCase implements CashSessionServicePort, CashSessionQu
         return session;
     }
 
-    private CashSessionDomain close(UUID sessionId, UUID userId, UUID deviceId,
+    private CashSessionDomain closeAndRelease(CashSessionDomain session, UUID userId, UUID deviceId,
             BigDecimal closingAmount, String notes) {
-        return sessionPersistencePort.close(
-                sessionId,
+        CashSessionDomain closed = sessionPersistencePort.close(
+                session.getId(),
                 userId,
                 deviceId,
                 requireNonNegative(closingAmount, "closingAmount"),
                 notes);
+        CashRegisterDomain register = loadRegister(session.getRestaurantId(), session.getCashRegisterId());
+        register.setDeviceId(null);
+        register.setUpdatedBy(userId);
+        registerPersistencePort.update(register);
+        return closed;
     }
 
     private BigDecimal requireNonNegative(BigDecimal amount, String fieldName) {

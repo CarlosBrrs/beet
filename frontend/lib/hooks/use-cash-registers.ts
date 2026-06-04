@@ -60,6 +60,18 @@ async function deactivateCashRegister(
     return response.data
 }
 
+async function releaseCashRegisterDeviceBinding(
+    restaurantId: string,
+    registerId: string
+): Promise<CashRegisterResponse> {
+    const response = await apiClient<ApiGenericResponse<CashRegisterResponse>>(
+        `/restaurants/${restaurantId}/cash-registers/${registerId}/device-binding`,
+        { method: "DELETE" }
+    )
+    if (!response.success) throw new Error(response.errorMessage || "Failed to release cash register device")
+    return response.data
+}
+
 export function useCashRegisters() {
     const { restaurantId } = useRestaurantContext()
 
@@ -110,5 +122,19 @@ export function useDeactivateCashRegister() {
             toast.success("Cash register deactivated")
         },
         onError: (error: Error) => toast.error(error.message || "Failed to deactivate cash register"),
+    })
+}
+
+export function useReleaseCashRegisterDeviceBinding() {
+    const { restaurantId } = useRestaurantContext()
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: (registerId: string) => releaseCashRegisterDeviceBinding(restaurantId!, registerId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: cashRegisterKeys.list(restaurantId) })
+            toast.success("Cash register device released")
+        },
+        onError: (error: Error) => toast.error(error.message || "Failed to release cash register device"),
     })
 }

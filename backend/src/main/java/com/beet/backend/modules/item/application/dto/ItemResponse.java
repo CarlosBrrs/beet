@@ -18,6 +18,10 @@ public record ItemResponse(
                 UUID yieldUnitId,
                 BigDecimal salePrice,
                 BigDecimal theoreticalCost,
+                boolean isActive,
+                boolean isAvailableAsTemplateOption,
+                boolean isPublished,
+                boolean isUsedAsTemplateOption,
                 List<RecipeLineResponse> recipeLines,
                 OffsetDateTime createdAt,
                 OffsetDateTime updatedAt) {

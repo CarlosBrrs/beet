@@ -1,10 +1,7 @@
 "use client"
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { LayoutDashboard, Menu, ShoppingCart, Users, Settings, ArrowLeft, LogOut } from "lucide-react"
-import { RestaurantProvider, useRestaurantContext } from "@/components/providers/restaurant-provider"
+import { LogOut } from "lucide-react"
+import { RestaurantProvider } from "@/components/providers/restaurant-provider"
 import { RestaurantSelector } from "@/components/modules/restaurants/restaurant-selector"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { SidebarNav } from "./sidebar-nav"
@@ -71,28 +68,9 @@ function RestaurantLayoutInner({ children }: { children: React.ReactNode }) {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto px-8 pt-6">
+            <main className="flex-1 overflow-y-auto px-8 pb-12 pt-6">
                 {children}
             </main>
         </div>
-    )
-}
-
-function ContextNavLink({ href, children, icon }: { href: string, children: React.ReactNode, icon: React.ReactNode }) {
-    const pathname = usePathname()
-    // Simple active check: strictly equal or starts with (for sub-routes)
-    const isActive = pathname === href || pathname.startsWith(`${href}/`)
-
-    return (
-        <Link
-            href={href}
-            className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                isActive ? "bg-red-100 text-red-700 hover:bg-red-200" : "text-slate-600 hover:bg-slate-100"
-            )}
-        >
-            {icon}
-            {children}
-        </Link>
     )
 }

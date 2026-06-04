@@ -134,6 +134,7 @@ export function useCloseCashSession() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: cashSessionKeys.active(restaurantId) })
             queryClient.invalidateQueries({ queryKey: cashSessionKeys.lists() })
+            queryClient.invalidateQueries({ queryKey: cashRegisterKeys.list(restaurantId) })
             toast.success("Cash session closed")
         },
         onError: (error: Error) => toast.error(error.message || "Failed to close cash session"),
@@ -165,6 +166,7 @@ export function useForceCloseCashSession() {
         onSuccess: (_response, variables) => {
             queryClient.invalidateQueries({ queryKey: cashSessionKeys.lists() })
             queryClient.invalidateQueries({ queryKey: cashSessionKeys.active(variables.restaurantId) })
+            queryClient.invalidateQueries({ queryKey: cashRegisterKeys.list(variables.restaurantId) })
             toast.success("Cash session force closed")
         },
         onError: (error: Error) => toast.error(error.message || "Failed to force close cash session"),

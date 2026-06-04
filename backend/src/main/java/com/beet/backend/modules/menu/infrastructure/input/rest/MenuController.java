@@ -39,6 +39,7 @@ public class MenuController {
             @PathVariable UUID restaurantId,
             @PathVariable UUID menuId,
             @Valid @RequestBody UpdateMenuRequest request) {
+        menuHandler.assertMenuPath(restaurantId, menuId);
         return ResponseEntity.ok(menuHandler.updateMenu(menuId, request));
     }
 

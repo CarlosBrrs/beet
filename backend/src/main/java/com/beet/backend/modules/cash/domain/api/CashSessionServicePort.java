@@ -15,8 +15,5 @@ public interface CashSessionServicePort {
     CashSessionDomain forceCloseSession(UUID restaurantId, UUID sessionId, UUID userId,
             UUID deviceId, BigDecimal closingAmount, String notes);
 
-    CashSessionDomain rebindSession(UUID restaurantId, UUID sessionId, UUID userId,
-            UUID newDeviceId);
-
     CashSessionDomain getActiveSession(UUID restaurantId, UUID deviceId);
 }

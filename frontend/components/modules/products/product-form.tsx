@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
-import { Check, ChevronsUpDown, Loader2, Plus, Trash2 } from "lucide-react"
+import { Check, ChevronsUpDown, Info, Loader2, Plus, Trash2 } from "lucide-react"
 import { formatPriceDisplay, parsePriceInput } from "@/lib/formatters"
 import { useUnits } from "@/lib/hooks/use-units"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -26,10 +26,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { useInventoryStocks } from "@/lib/hooks/use-inventory"
-import { usePreparations } from "@/lib/hooks/use-items"
+import { useCreateCatalogProduct, usePreparations, useProductById, useUpdateProduct } from "@/lib/hooks/use-items"
 import { useCreateSubmenuProduct, useUpdateSubmenuProduct, useProduct } from "@/lib/hooks/use-submenu-nodes"
 
 import { useRestaurantContext } from "@/components/providers/restaurant-provider"
+import { ItemResponse } from "@/lib/api-types"
 
 // ── Inline Combobox ──────────────────────────────────────────────────────────
 
@@ -108,8 +109,9 @@ const recipeLineSchema = z.object({
 const productSchema = z.object({
     name: z.string().min(2, "Mínimo 2 caracteres"),
     description: z.string().optional(),
-    salePrice: z.string().min(1, "Precio requerido"),
+    salePrice: z.string().optional(),
     isInventoryTracked: z.boolean(),
+    isAvailableAsTemplateOption: z.boolean(),
     userDefinedCost: z.string().optional(),
     lines: z.array(recipeLineSchema).optional(),
     yieldQty: z.number().positive().optional(),
@@ -125,18 +127,25 @@ type ProductFormValues = z.infer<typeof productSchema>
 // ── Component ────────────────────────────────────────────────────────────────
 
 interface ProductFormProps {
-    menuId: string
-    submenuId: string
+    menuId?: string
+    submenuId?: string
     productId?: string | null
-    onSuccess?: () => void
+    forceAvailableAsTemplateOption?: boolean
+    onSuccess?: (product: ItemResponse) => void
 }
 
-export function ProductForm({ menuId, submenuId, productId, onSuccess }: ProductFormProps) {
+export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemplateOption = false, onSuccess }: ProductFormProps) {
     const { restaurantId } = useRestaurantContext()
     const { data: units = [] } = useUnits()
-    const createProduct = useCreateSubmenuProduct(menuId, submenuId)
-    const updateProduct = useUpdateSubmenuProduct(menuId, submenuId, productId || "")
-    const { data: initialProduct, isLoading: isLoadingInitial } = useProduct(menuId, submenuId, productId || undefined)
+    const isCatalogMode = !menuId || !submenuId
+    const createSubmenuProduct = useCreateSubmenuProduct(menuId ?? "", submenuId ?? "")
+    const updateSubmenuProduct = useUpdateSubmenuProduct(menuId ?? "", submenuId ?? "", productId || "")
+    const createCatalogProduct = useCreateCatalogProduct()
+    const updateCatalogProduct = useUpdateProduct()
+    const submenuProduct = useProduct(menuId, submenuId, isCatalogMode ? undefined : productId || undefined)
+    const catalogProduct = useProductById(isCatalogMode ? productId : undefined)
+    const initialProduct = isCatalogMode ? catalogProduct.data : submenuProduct.data
+    const isLoadingInitial = isCatalogMode ? catalogProduct.isLoading : submenuProduct.isLoading
 
     // Fetch only ingredients activated in this restaurant's inventory
     const { data: inventoryData } = useInventoryStocks({
@@ -159,6 +168,7 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
             description: "",
             salePrice: "",
             isInventoryTracked: false,
+            isAvailableAsTemplateOption: forceAvailableAsTemplateOption,
             userDefinedCost: "",
             lines: [],
         },
@@ -171,6 +181,7 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                 description: initialProduct.description || "",
                 salePrice: initialProduct.salePrice?.toString() || "",
                 isInventoryTracked: initialProduct.isInventoryTracked,
+                isAvailableAsTemplateOption: initialProduct.isAvailableAsTemplateOption,
                 userDefinedCost: initialProduct.theoreticalCost?.toString() || "",
                 yieldQty: initialProduct.yieldQty || undefined,
                 yieldUnitId: initialProduct.yieldUnitId || undefined,
@@ -189,7 +200,8 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
 
     const watchIsTracked = form.watch("isInventoryTracked")
     const watchLines = form.watch("lines")
-    const isPending = createProduct.isPending || updateProduct.isPending
+    const isPending = createSubmenuProduct.isPending || updateSubmenuProduct.isPending
+        || createCatalogProduct.isPending || updateCatalogProduct.isPending
 
     if (productId && isLoadingInitial) {
         return (
@@ -214,7 +226,7 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                 return unit?.type ?? null
             }
         } else if (line.source === "PREPARATION" && line.childItemId) {
-            const prep = (preparations as any[]).find(p => p.id === line.childItemId)
+            const prep = preparations.find(p => p.id === line.childItemId)
             if (prep?.yieldUnitId) {
                 const unit = units.find(u => u.id === prep.yieldUnitId)
                 return unit?.type ?? null
@@ -224,12 +236,13 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
     }
 
     const onSubmit = (values: ProductFormValues) => {
-        const payload: any = {
+        const payload: import("@/lib/api-types").CreateProductRequest = {
             name: values.name,
             description: values.description,
-            salePrice: parsePriceInput(values.salePrice),
             isInventoryTracked: values.isInventoryTracked,
+            isAvailableAsTemplateOption: forceAvailableAsTemplateOption || values.isAvailableAsTemplateOption,
         }
+        if (values.salePrice) payload.salePrice = parsePriceInput(values.salePrice)
 
         if (values.isInventoryTracked && values.lines) {
             payload.lines = values.lines.map(line => ({
@@ -252,9 +265,17 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
         }
 
         if (productId) {
-            updateProduct.mutate(payload, { onSuccess: () => onSuccess?.() })
+            if (isCatalogMode) {
+                updateCatalogProduct.mutate({ id: productId, data: payload }, { onSuccess: (product) => onSuccess?.(product) })
+            } else {
+                updateSubmenuProduct.mutate(payload, { onSuccess: (product) => onSuccess?.(product) })
+            }
         } else {
-            createProduct.mutate(payload, { onSuccess: () => onSuccess?.() })
+            if (isCatalogMode) {
+                createCatalogProduct.mutate(payload, { onSuccess: (product) => onSuccess?.(product) })
+            } else {
+                createSubmenuProduct.mutate(payload, { onSuccess: (product) => onSuccess?.(product) })
+            }
         }
     }
 
@@ -296,7 +317,10 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                         name="salePrice"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Precio de Venta</FormLabel>
+                                <FormLabel>Precio de Venta {isCatalogMode && "(opcional)"}</FormLabel>
+                                <FormDescription>
+                                    Necesario para publicar el producto individualmente en un submenu. Puede quedar vacio si se usara solo como opcion de un armable.
+                                </FormDescription>
                                 <FormControl>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -314,6 +338,24 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                         )}
                     />
 
+                    <FormField
+                        control={form.control}
+                        name="isAvailableAsTemplateOption"
+                        render={({ field }) => (
+                            <FormItem className="flex items-center justify-between gap-4 rounded border p-3">
+                                <div>
+                                    <FormLabel>Disponible como opción para armables</FormLabel>
+                                    <FormDescription>
+                                        Permite seleccionar este producto dentro de los slots de un armable. No lo publica individualmente en el menu.
+                                    </FormDescription>
+                                </div>
+                                <FormControl>
+                                    <Switch checked={forceAvailableAsTemplateOption || field.value} disabled={forceAvailableAsTemplateOption} onCheckedChange={field.onChange} />
+                                </FormControl>
+                            </FormItem>
+                        )}
+                    />
+
                     <div className="flex gap-6 pt-2">
                         <FormField
                             control={form.control}
@@ -322,7 +364,11 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm w-full">
                                     <div className="space-y-0.5">
                                         <FormLabel>Rastrear en Inventario</FormLabel>
-                                        <FormDescription>Activar para deducir / rastrear existencias.</FormDescription>
+                                        <FormDescription>
+                                            {productId
+                                                ? "Se define al crear el producto. Cambiarlo despues requiere migrar su modelo de costo y receta."
+                                                : "Activa esta opcion si el costo se calculara desde una receta y sus existencias deben rastrearse."}
+                                        </FormDescription>
                                     </div>
                                     <FormControl>
                                         <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!!productId} />
@@ -332,6 +378,19 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                         />
 
                     </div>
+                    {productId && initialProduct && !initialProduct.isInventoryTracked && (
+                        <div className="flex gap-3 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                            <div>
+                                <p className="font-medium">Pendiente: convertir productos planos en rastreados</p>
+                                <p className="mt-1 text-xs leading-relaxed">
+                                    Este producto conserva por ahora su costo manual. A futuro se agregara un flujo dedicado
+                                    para incorporar receta, rendimiento y costo calculado sin perder sus publicaciones,
+                                    usos dentro de armables ni referencias historicas.
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {!watchIsTracked ? (
@@ -379,7 +438,7 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                                 name="yieldQty"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Rendimiento (Porciones)</FormLabel>
+                                        <FormLabel>Cantidad producida por la receta</FormLabel>
                                         <FormControl>
                                             <Input
                                                 type="number"
@@ -389,6 +448,9 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                                                 onChange={e => field.onChange(parseFloat(e.target.value))}
                                             />
                                         </FormControl>
+                                        <FormDescription>
+                                            Total vendible producido. Ej.: 1 pcs de hamburguesa o 50 pcs de empanadas.
+                                        </FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}
@@ -398,7 +460,7 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                                 name="yieldUnitId"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Unidad de Rendimiento</FormLabel>
+                                        <FormLabel>Unidad producida</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl>
                                                 <SelectTrigger>
@@ -495,7 +557,7 @@ export function ProductForm({ menuId, submenuId, productId, onSuccess }: Product
                                                             <FormLabel className="text-xs">Preparación</FormLabel>
                                                             <FormControl>
                                                                 <ItemCombobox
-                                                                    items={preparations as any[]}
+                                                                    items={preparations}
                                                                     value={f.value}
                                                                     onChange={(id) => {
                                                                         f.onChange(id)

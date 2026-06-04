@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * A specific choice within a slot (e.g. "Burger Doble").
- * Only SALEABLE_PRODUCT items can be options.
+ * Only PRODUCT items can be options.
  */
 @Getter
 @Setter
@@ -21,12 +21,13 @@ public class SlotOptionDomain {
     private UUID id;
     private UUID slotId;
 
-    /** Must reference an item with class = SALEABLE_PRODUCT */
+    /** Must reference an item with class = PRODUCT */
     private UUID itemId;
 
     /** Extra cost added to the template's base_price when this option is chosen. */
     private BigDecimal surcharge;
 
     private boolean isDefault;
+    private int maxQuantity;
     private int sortOrder;
 }

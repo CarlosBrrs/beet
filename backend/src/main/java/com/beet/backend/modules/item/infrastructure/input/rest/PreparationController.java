@@ -30,7 +30,7 @@ public class PreparationController {
     private final ItemHandler itemHandler;
 
     @PostMapping
-    @RequiresPermission(module = PermissionModule.RECIPES, action = PermissionAction.CREATE)
+    @RequiresPermission(module = PermissionModule.PREPARATIONS, action = PermissionAction.CREATE)
     public ResponseEntity<ApiGenericResponse<ItemResponse>> createPreparation(
             @PathVariable UUID restaurantId,
             @Valid @RequestBody CreatePreparationRequest request) {
@@ -39,34 +39,34 @@ public class PreparationController {
     }
 
     @GetMapping
-    @RequiresPermission(module = PermissionModule.RECIPES, action = PermissionAction.VIEW)
+    @RequiresPermission(module = PermissionModule.PREPARATIONS, action = PermissionAction.VIEW)
     public ResponseEntity<ApiGenericResponse<List<ItemResponse>>> getAllPreparations(
             @PathVariable UUID restaurantId) {
         return ResponseEntity.ok(itemHandler.getAllPreparations(restaurantId));
     }
 
     @GetMapping("/{itemId}")
-    @RequiresPermission(module = PermissionModule.RECIPES, action = PermissionAction.VIEW)
+    @RequiresPermission(module = PermissionModule.PREPARATIONS, action = PermissionAction.VIEW)
     public ResponseEntity<ApiGenericResponse<ItemResponse>> getById(
             @PathVariable UUID restaurantId,
             @PathVariable UUID itemId) {
-        return ResponseEntity.ok(itemHandler.getById(itemId));
+        return ResponseEntity.ok(itemHandler.getById(restaurantId, itemId));
     }
 
     @PutMapping("/{itemId}")
-    @RequiresPermission(module = PermissionModule.RECIPES, action = PermissionAction.EDIT)
+    @RequiresPermission(module = PermissionModule.PREPARATIONS, action = PermissionAction.EDIT)
     public ResponseEntity<ApiGenericResponse<ItemResponse>> updatePreparation(
             @PathVariable UUID restaurantId,
             @PathVariable UUID itemId,
             @Valid @RequestBody UpdateItemRequest request) {
-        return ResponseEntity.ok(itemHandler.updateItem(itemId, request));
+        return ResponseEntity.ok(itemHandler.updateItem(restaurantId, itemId, request));
     }
 
     @DeleteMapping("/{itemId}")
-    @RequiresPermission(module = PermissionModule.RECIPES, action = PermissionAction.DELETE)
+    @RequiresPermission(module = PermissionModule.PREPARATIONS, action = PermissionAction.DELETE)
     public ResponseEntity<ApiGenericResponse<Void>> deletePreparation(
             @PathVariable UUID restaurantId,
             @PathVariable UUID itemId) {
-        return ResponseEntity.ok(itemHandler.deleteItem(itemId));
+        return ResponseEntity.ok(itemHandler.deleteItem(restaurantId, itemId));
     }
 }

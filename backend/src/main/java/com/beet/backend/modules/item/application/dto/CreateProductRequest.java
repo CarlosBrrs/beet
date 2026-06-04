@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Request DTO for creating a SALEABLE_PRODUCT (Capa 2).
+ * Request DTO for creating a PRODUCT (Capa 2).
  * Supports both tracked (with recipe) and flat (no recipe) products.
  *
  * Rules:
@@ -21,7 +21,7 @@ public record CreateProductRequest(
 
         String description,
 
-        @NotNull(message = "Sale price is required") @Positive(message = "Sale price must be positive") @Digits(integer = 12, fraction = 2) BigDecimal salePrice,
+        @Positive(message = "Sale price must be positive") @Digits(integer = 12, fraction = 2) BigDecimal salePrice,
 
         @NotNull(message = "isInventoryTracked is required") Boolean isInventoryTracked,
 
@@ -33,5 +33,6 @@ public record CreateProductRequest(
 
         // Yield — relevant for tracked products; defaults to 1 pc
         @Positive(message = "Yield quantity must be positive") BigDecimal yieldQty,
-        UUID yieldUnitId) {
+        UUID yieldUnitId,
+        Boolean isAvailableAsTemplateOption) {
 }

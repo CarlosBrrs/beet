@@ -39,6 +39,8 @@ export function SheetShell({
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent
                 side="right"
+                onEscapeKeyDown={(event) => event.preventDefault()}
+                onInteractOutside={(event) => event.preventDefault()}
                 className={cn(
                     "w-full flex flex-col h-full bg-background p-0 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
                     sizeClasses[size] ?? sizeClasses.default

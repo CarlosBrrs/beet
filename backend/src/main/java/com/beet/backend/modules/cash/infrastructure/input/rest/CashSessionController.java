@@ -4,7 +4,6 @@ import com.beet.backend.modules.cash.application.dto.CashSessionResponse;
 import com.beet.backend.modules.cash.application.dto.CashSessionListResponse;
 import com.beet.backend.modules.cash.application.dto.CloseCashSessionRequest;
 import com.beet.backend.modules.cash.application.dto.OpenCashSessionRequest;
-import com.beet.backend.modules.cash.application.dto.RebindCashSessionRequest;
 import com.beet.backend.modules.cash.application.handler.CashHandler;
 import com.beet.backend.modules.cash.domain.model.CashSessionStatus;
 import com.beet.backend.modules.role.domain.model.PermissionAction;
@@ -76,15 +75,6 @@ public class CashSessionController {
             @PathVariable UUID sessionId,
             @Valid @RequestBody CloseCashSessionRequest request) {
         return ResponseEntity.ok(handler.forceCloseSession(restaurantId, sessionId, request));
-    }
-
-    @PostMapping("/{sessionId}/rebind")
-    @RequiresPermission(module = PermissionModule.CASH, action = PermissionAction.MANAGE)
-    public ResponseEntity<ApiGenericResponse<CashSessionResponse>> rebind(
-            @PathVariable UUID restaurantId,
-            @PathVariable UUID sessionId,
-            @Valid @RequestBody RebindCashSessionRequest request) {
-        return ResponseEntity.ok(handler.rebindSession(restaurantId, sessionId, request));
     }
 
     @GetMapping("/active")

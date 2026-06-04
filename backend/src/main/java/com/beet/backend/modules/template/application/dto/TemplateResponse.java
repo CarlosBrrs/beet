@@ -11,6 +11,8 @@ public record TemplateResponse(
                 String name,
                 String description,
                 BigDecimal basePrice,
+                boolean isActive,
+                boolean isPublished,
                 List<SlotResponse> slots,
                 OffsetDateTime createdAt,
                 OffsetDateTime updatedAt) {
@@ -28,6 +30,7 @@ public record TemplateResponse(
                         UUID itemId,
                         BigDecimal surcharge,
                         boolean isDefault,
+                        int maxQuantity,
                         int sortOrder) {
         }
 }

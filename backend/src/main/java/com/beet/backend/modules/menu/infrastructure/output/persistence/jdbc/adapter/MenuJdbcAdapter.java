@@ -118,8 +118,10 @@ public class MenuJdbcAdapter implements MenuPersistencePort, SubmenuPersistenceP
     @Override
     public SubmenuDomain save(SubmenuDomain submenu) {
         String sql = """
-                    INSERT INTO submenus (menu_id, name, description, sort_order)
-                    VALUES (:menuId, :name, :description, :sortOrder)
+                    INSERT INTO submenus (menu_id, restaurant_id, name, description, sort_order)
+                    SELECT id, restaurant_id, :name, :description, :sortOrder
+                      FROM menus
+                     WHERE id = :menuId
                     RETURNING id, menu_id, name, description, sort_order, created_at, updated_at
                 """;
 
@@ -176,16 +178,18 @@ public class MenuJdbcAdapter implements MenuPersistencePort, SubmenuPersistenceP
     // --- Submenu nodes ---
 
     @Override
-    public List<SubmenuNodeDomain> findNodesBySubmenu(UUID submenuId) {
+    public List<SubmenuNodeDomain> findNodesBySubmenu(UUID restaurantId, UUID submenuId) {
         String sql = """
                     SELECT id, submenu_id, node_type, item_id, template_id, sort_order
                       FROM submenu_nodes
                      WHERE submenu_id = :submenuId
+                       AND restaurant_id = :restaurantId
                      ORDER BY sort_order ASC, id ASC
                 """;
 
         return jdbcClient.sql(sql)
                 .param("submenuId", submenuId)
+                .param("restaurantId", restaurantId)
                 .query(this::mapSubmenuNode)
                 .list();
     }
@@ -203,6 +207,61 @@ public class MenuJdbcAdapter implements MenuPersistencePort, SubmenuPersistenceP
                                 .query(this::mapSubmenuNode)
                                 .optional();
         }
+
+    @Override
+    public SubmenuNodeDomain saveNode(UUID restaurantId, UUID submenuId, SubmenuNodeType nodeType,
+            UUID referenceId, int sortOrder) {
+        String referenceColumn = nodeType == SubmenuNodeType.PRODUCT ? "item_id" : "template_id";
+        String referenceTable = nodeType == SubmenuNodeType.PRODUCT ? "items" : "templates";
+        String productGuard = nodeType == SubmenuNodeType.PRODUCT
+                ? " AND r.class = 'PRODUCT' AND r.sale_price > 0"
+                : "";
+        String sql = """
+                INSERT INTO submenu_nodes (submenu_id, restaurant_id, node_type, %s, sort_order)
+                SELECT s.id, s.restaurant_id, :nodeType::submenu_node_type, :referenceId, :sortOrder
+                  FROM submenus s
+                  JOIN %s r ON r.id = :referenceId
+                           AND r.restaurant_id = s.restaurant_id
+                           AND r.deleted_at IS NULL
+                           AND r.is_active = TRUE
+                 WHERE s.id = :submenuId
+                   AND s.restaurant_id = :restaurantId
+                   %s
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM submenu_nodes existing
+                        WHERE existing.%s = :referenceId
+                   )
+                RETURNING id, submenu_id, node_type, item_id, template_id, sort_order
+                """.formatted(referenceColumn, referenceTable, productGuard, referenceColumn);
+        return jdbcClient.sql(sql)
+                .param("restaurantId", restaurantId)
+                .param("submenuId", submenuId)
+                .param("nodeType", nodeType.name())
+                .param("referenceId", referenceId)
+                .param("sortOrder", sortOrder)
+                .query(this::mapSubmenuNode)
+                .optional()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "The resource cannot be published: verify tenant, activity, price and existing publications."));
+    }
+
+    @Override
+    public void deleteNode(UUID restaurantId, UUID submenuId, UUID nodeId) {
+        int updated = jdbcClient.sql("""
+                DELETE FROM submenu_nodes
+                 WHERE id = :nodeId
+                   AND submenu_id = :submenuId
+                   AND restaurant_id = :restaurantId
+                """)
+                .param("restaurantId", restaurantId)
+                .param("submenuId", submenuId)
+                .param("nodeId", nodeId)
+                .update();
+        if (updated == 0) {
+            throw new IllegalArgumentException("Submenu node not found.");
+        }
+    }
 
     // --- Mappers ---
 

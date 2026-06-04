@@ -29,6 +29,10 @@ public class TemplateDomain {
 
     /** Starting price charged to the customer before any surcharges. */
     private BigDecimal basePrice;
+    private boolean isActive;
+    private boolean isPublished;
+    private UUID createdBy;
+    private UUID updatedBy;
 
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

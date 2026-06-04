@@ -81,6 +81,14 @@ public class CashJdbcAdapter implements CashRegisterPersistencePort, CashSession
     }
 
     @Override
+    public Optional<CashRegisterDomain> findRegisterByIdForUpdate(UUID id) {
+        return jdbc.sql("SELECT * FROM cash_registers WHERE id = :id FOR UPDATE")
+                .param("id", id)
+                .query(this::mapRegister)
+                .optional();
+    }
+
+    @Override
     public List<CashRegisterDomain> findByRestaurantId(UUID restaurantId) {
         return jdbc.sql("""
                 SELECT * FROM cash_registers
@@ -101,19 +109,6 @@ public class CashJdbcAdapter implements CashRegisterPersistencePort, CashSession
                 """)
                 .param("restaurantId", restaurantId)
                 .param("name", name)
-                .query(Integer.class)
-                .single() > 0;
-    }
-
-    @Override
-    public boolean existsByDevice(UUID restaurantId, UUID deviceId) {
-        return jdbc.sql("""
-                SELECT COUNT(1) FROM cash_registers
-                 WHERE restaurant_id = :restaurantId
-                   AND device_id = :deviceId
-                """)
-                .param("restaurantId", restaurantId)
-                .param("deviceId", deviceId)
                 .query(Integer.class)
                 .single() > 0;
     }
@@ -160,22 +155,6 @@ public class CashJdbcAdapter implements CashRegisterPersistencePort, CashSession
                 .param("closedDeviceId", closedDeviceId)
                 .param("closingAmount", closingAmount)
                 .param("notes", notes)
-                .query(this::mapSession)
-                .optional()
-                .orElseThrow(CashSessionConflictException::alreadyClosed);
-    }
-
-    @Override
-    public CashSessionDomain rebind(UUID sessionId, UUID newDeviceId) {
-        return jdbc.sql("""
-                UPDATE cash_sessions
-                   SET opened_device_id = :newDeviceId
-                 WHERE id = :id
-                   AND status = 'OPEN'
-             RETURNING *
-                """)
-                .param("id", sessionId)
-                .param("newDeviceId", newDeviceId)
                 .query(this::mapSession)
                 .optional()
                 .orElseThrow(CashSessionConflictException::alreadyClosed);

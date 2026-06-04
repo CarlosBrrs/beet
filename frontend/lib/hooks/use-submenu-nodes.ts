@@ -8,7 +8,10 @@ import {
     ItemResponse,
     UpdateItemRequest,
     TemplateResponse,
+    PublishSubmenuNodeRequest,
 } from "@/lib/api-types";
+import { itemKeys } from "@/lib/hooks/use-items";
+import { templateKeys } from "@/lib/hooks/use-templates";
 import { useRestaurantContext } from "@/components/providers/restaurant-provider";
 import { toast } from "sonner";
 
@@ -76,6 +79,7 @@ export function useCreateSubmenuProduct(menuId: string, submenuId: string) {
             queryClient.invalidateQueries({
                 queryKey: submenuNodeKeys.list(restaurantId, menuId, submenuId),
             });
+            queryClient.invalidateQueries({ queryKey: itemKeys.all });
             toast.success("Producto creado exitosamente");
         },
         onError: (error: unknown) => {
@@ -103,6 +107,7 @@ export function useUpdateSubmenuProduct(menuId: string, submenuId: string, produ
             queryClient.invalidateQueries({
                 queryKey: submenuNodeKeys.item(restaurantId, menuId, submenuId, productId),
             });
+            queryClient.invalidateQueries({ queryKey: itemKeys.all });
             toast.success("Producto actualizado exitosamente");
         },
         onError: (error: unknown) => {
@@ -127,6 +132,7 @@ export function useCreateSubmenuTemplate(menuId: string, submenuId: string) {
             queryClient.invalidateQueries({
                 queryKey: submenuNodeKeys.list(restaurantId, menuId, submenuId),
             });
+            queryClient.invalidateQueries({ queryKey: templateKeys.all });
             toast.success("Plantilla creada exitosamente");
         },
         onError: (error: unknown) => {
@@ -150,10 +156,34 @@ export function useDeleteSubmenuNode(menuId: string, submenuId: string) {
             queryClient.invalidateQueries({
                 queryKey: submenuNodeKeys.list(restaurantId, menuId, submenuId),
             });
+            queryClient.invalidateQueries({ queryKey: itemKeys.all });
+            queryClient.invalidateQueries({ queryKey: templateKeys.all });
             toast.success("Elemento removido del submenú");
         },
         onError: (error: unknown) => {
             toast.error(getErrorMessage(error, "Error al eliminar"));
         },
+    });
+}
+
+export function usePublishSubmenuNode(menuId: string, submenuId: string) {
+    const queryClient = useQueryClient();
+    const { restaurantId } = useRestaurantContext();
+
+    return useMutation({
+        mutationFn: async (payload: PublishSubmenuNodeRequest) => {
+            const data = await apiClient<ApiGenericResponse<SubmenuNodeResponse>>(
+                `/restaurants/${restaurantId}/menus/${menuId}/submenus/${submenuId}/nodes`,
+                { method: "POST", body: JSON.stringify(payload) }
+            );
+            return data.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: submenuNodeKeys.list(restaurantId, menuId, submenuId) });
+            queryClient.invalidateQueries({ queryKey: itemKeys.all });
+            queryClient.invalidateQueries({ queryKey: templateKeys.all });
+            toast.success("Elemento publicado en el submenu");
+        },
+        onError: (error: unknown) => toast.error(getErrorMessage(error, "Error al publicar el elemento")),
     });
 }

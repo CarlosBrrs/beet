@@ -16,6 +16,9 @@ public enum PermissionModule {
     KITCHEN,
     INVOICES,
     MENUS,
+    PRODUCTS,
+    PREPARATIONS,
+    TEMPLATES,
     // Wildcard for "all modules"
     ALL
 }

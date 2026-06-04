@@ -11,12 +11,12 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2 } from "lucide-react"
+import { CircleCheck, Loader2, Minus, Plus } from "lucide-react"
 import { toast } from "sonner"
-import { useForm, Controller } from "react-hook-form"
+import { useForm, Controller, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { formatPriceDisplay, parsePriceInput } from "@/lib/formatters"
+import { formatPriceDisplay, formatQuantityDisplay, parsePriceInput } from "@/lib/formatters"
 
 const REASON_OPTIONS = [
     {
@@ -43,6 +43,7 @@ const adjustSchema = z.object({
 })
 
 type AdjustFormValues = z.infer<typeof adjustSchema>
+type DeltaDirection = "ADD" | "REMOVE" | null
 
 interface StockAdjustmentDialogProps {
     stock: InventoryStockResponse | null
@@ -53,6 +54,7 @@ interface StockAdjustmentDialogProps {
 export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjustmentDialogProps) {
     const { restaurantId } = useRestaurantContext()
     const [mode, setMode] = useState<"REPLACE" | "DELTA">("DELTA")
+    const [deltaDirection, setDeltaDirection] = useState<DeltaDirection>(null)
 
     const adjustMutation = useAdjustInventoryStock(restaurantId!)
 
@@ -62,25 +64,45 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
         defaultValues: { value: "", reason: undefined, notes: "" },
     })
 
-    const watchedValue = form.watch("value")
+    const watchedValue = useWatch({ control: form.control, name: "value" })
+
+    const numericValue = useMemo(() => parsePriceInput(watchedValue || "0"), [watchedValue])
+    const signedDelta = mode === "DELTA" && deltaDirection
+        ? deltaDirection === "REMOVE" ? -Math.abs(numericValue) : Math.abs(numericValue)
+        : null
 
     // Compute what the resulting stock would be
     const previewStock = useMemo(() => {
-        const numericVal = parsePriceInput(watchedValue || "0")
-        if (!stock || isNaN(numericVal)) return null
-        if (mode === "REPLACE") return numericVal
-        return stock.currentStock + numericVal
-    }, [stock, watchedValue, mode])
+        if (!stock) return null
+        if (mode === "REPLACE") return numericValue
+        return signedDelta !== null ? stock.currentStock + signedDelta : null
+    }, [mode, numericValue, signedDelta, stock])
 
     const handleSubmit = (values: AdjustFormValues) => {
         if (!stock) return
+        const parsedValue = parsePriceInput(values.value)
+        if (mode === "DELTA" && !deltaDirection) {
+            toast.error("Select Add or Remove")
+            return
+        }
+        if (mode === "DELTA" && parsedValue === 0) {
+            toast.error("Enter a quantity greater than zero")
+            return
+        }
+        if (mode === "REPLACE" && parsedValue < 0) {
+            toast.error("Stock total cannot be negative")
+            return
+        }
+        const adjustmentValue = mode === "DELTA" && deltaDirection === "REMOVE"
+            ? -Math.abs(parsedValue)
+            : mode === "DELTA" ? Math.abs(parsedValue) : parsedValue
 
         adjustMutation.mutate(
             {
                 stockId: stock.id,
                 payload: {
                     mode,
-                    value: parsePriceInput(values.value),
+                    value: adjustmentValue,
                     reason: values.reason,
                     notes: values.notes || undefined,
                 },
@@ -90,6 +112,7 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
                     toast.success(`Stock for ${stock.ingredientName} updated!`)
                     form.reset()
                     setMode("DELTA")
+                    setDeltaDirection(null)
                     onOpenChange(false)
                 },
                 onError: (err) => {
@@ -103,6 +126,7 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
         if (!isOpen) {
             form.reset()
             setMode("DELTA")
+            setDeltaDirection(null)
         }
         onOpenChange(isOpen)
     }
@@ -114,11 +138,12 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
             open={open}
             onOpenChange={handleClose}
             title="Adjust Stock"
-            description={`${stock.ingredientName} — Current: ${stock.currentStock} ${stock.unitAbbreviation}`}
+            description={`${stock.ingredientName} - Current: ${stock.currentStock} ${stock.unitAbbreviation}`}
         >
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
                 <Tabs value={mode} onValueChange={(v) => {
                     setMode(v as "REPLACE" | "DELTA")
+                    setDeltaDirection(null)
                     form.setValue("value", "", { shouldValidate: true })
                 }}>
                     <TabsList className="grid w-full grid-cols-2">
@@ -128,17 +153,48 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
 
                     <TabsContent value="DELTA" className="space-y-3 pt-2">
                         <div className="space-y-2">
-                            <Label htmlFor="delta-value">Delta ({stock.unitAbbreviation})</Label>
+                            <Label>Operation</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    aria-pressed={deltaDirection === "ADD"}
+                                    className={deltaDirection === "ADD"
+                                        ? "border-green-600 bg-green-100 text-green-900 ring-2 ring-green-500 ring-offset-1 hover:bg-green-100 hover:text-green-900 dark:bg-green-950/60 dark:text-green-100"
+                                        : "border-border bg-background text-foreground hover:border-green-400 hover:bg-green-50 hover:text-green-800 dark:hover:bg-green-950/30 dark:hover:text-green-100"}
+                                    onClick={() => setDeltaDirection("ADD")}
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    Add
+                                    {deltaDirection === "ADD" && <CircleCheck className="ml-auto h-4 w-4" />}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    aria-pressed={deltaDirection === "REMOVE"}
+                                    className={deltaDirection === "REMOVE"
+                                        ? "border-red-600 bg-red-100 text-red-900 ring-2 ring-red-500 ring-offset-1 hover:bg-red-100 hover:text-red-900 dark:bg-red-950/60 dark:text-red-100"
+                                        : "border-border bg-background text-foreground hover:border-red-400 hover:bg-red-50 hover:text-red-800 dark:hover:bg-red-950/30 dark:hover:text-red-100"}
+                                    onClick={() => setDeltaDirection("REMOVE")}
+                                >
+                                    <Minus className="h-4 w-4" />
+                                    Remove
+                                    {deltaDirection === "REMOVE" && <CircleCheck className="ml-auto h-4 w-4" />}
+                                </Button>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="delta-value">Quantity ({stock.unitAbbreviation})</Label>
                             <Input
                                 id="delta-value"
-                                placeholder="Ej. -5 para restar, 10 para sumar"
+                                placeholder="e.g. 5"
                                 {...form.register("value")}
                                 onBlur={(e) => {
-                                    form.setValue("value", formatPriceDisplay(e.target.value))
+                                    form.setValue("value", formatQuantityDisplay(e.target.value))
                                 }}
                             />
                             <p className="text-xs text-muted-foreground">
-                                Use negative values to remove stock, positive to add.
+                                Select whether this quantity enters or leaves inventory.
                             </p>
                         </div>
                     </TabsContent>
@@ -159,8 +215,24 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
                 </Tabs>
 
                 {/* Live preview of resulting stock */}
-                {previewStock !== null && (
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg text-sm">
+                {mode === "DELTA" ? (
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 bg-muted p-3 text-center">
+                        <StockAmount value={stock.currentStock} unit={stock.unitAbbreviation} />
+                        <span className={`text-xl font-semibold ${deltaDirection === "ADD"
+                            ? "text-green-700 dark:text-green-400"
+                            : deltaDirection === "REMOVE" ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}>
+                            {deltaDirection === "ADD" ? "+" : deltaDirection === "REMOVE" ? "-" : "?"}
+                        </span>
+                        <StockAmount
+                            value={Math.abs(numericValue)}
+                            unit={stock.unitAbbreviation}
+                            tone={deltaDirection === "ADD" ? "positive" : deltaDirection === "REMOVE" ? "negative" : "default"}
+                        />
+                        <span className="text-xl font-semibold text-muted-foreground">=</span>
+                        <StockAmount value={previewStock} unit={stock.unitAbbreviation} emphasize />
+                    </div>
+                ) : previewStock !== null && (
+                    <div className="flex items-center justify-between bg-muted p-3 text-sm">
                         <span className="text-muted-foreground">Resulting stock:</span>
                         <span className={`font-bold ${previewStock < 0 ? "text-destructive" : "text-foreground"}`}>
                             {previewStock.toFixed(2)} {stock.unitAbbreviation}
@@ -211,7 +283,10 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
                 <div className="flex justify-end">
                     <Button
                         type="submit"
-                        disabled={adjustMutation.isPending || !form.formState.isValid}
+                        disabled={adjustMutation.isPending
+                            || !form.formState.isValid
+                            || (mode === "DELTA" && (!deltaDirection || numericValue === 0))
+                            || (mode === "REPLACE" && numericValue < 0)}
                     >
                         {adjustMutation.isPending ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
@@ -222,5 +297,26 @@ export function StockAdjustmentDialog({ stock, open, onOpenChange }: StockAdjust
                 </div>
             </form>
         </DialogShell>
+    )
+}
+
+function StockAmount({
+    value,
+    unit,
+    emphasize = false,
+    tone = "default",
+}: {
+    value: number | null
+    unit: string
+    emphasize?: boolean
+    tone?: "default" | "positive" | "negative"
+}) {
+    const toneClass = tone === "positive"
+        ? "text-green-700 dark:text-green-400"
+        : tone === "negative" ? "text-red-700 dark:text-red-400" : "text-foreground"
+    return (
+        <span className={`min-w-0 break-words text-lg font-bold ${emphasize && value !== null && value < 0 ? "text-destructive" : toneClass}`}>
+            {value === null ? "--" : value.toFixed(2)} {unit}
+        </span>
     )
 }

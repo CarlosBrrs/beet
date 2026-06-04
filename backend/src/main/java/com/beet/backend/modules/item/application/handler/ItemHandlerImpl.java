@@ -4,6 +4,7 @@ import com.beet.backend.modules.item.application.dto.*;
 import com.beet.backend.modules.item.domain.api.ItemServicePort;
 import com.beet.backend.modules.item.domain.model.*;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
+import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import com.beet.backend.shared.infrastructure.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class ItemHandlerImpl implements ItemHandler {
                 .recipeLines(toRecipeLineDomains(request.lines()))
                 .createdBy(currentUserId)
                 .updatedBy(currentUserId)
+                .isActive(true)
                 .build();
         return ApiGenericResponse.success(toResponse(itemServicePort.createPreparation(domain)));
     }
@@ -48,10 +50,14 @@ public class ItemHandlerImpl implements ItemHandler {
     }
 
     @Override
-    public ApiGenericResponse<List<ItemResponse>> getAllProducts(UUID restaurantId) {
-        return ApiGenericResponse.success(
-                itemServicePort.getAllByRestaurantAndClass(restaurantId, ItemClass.SALEABLE_PRODUCT)
-                        .stream().map(this::toResponse).collect(Collectors.toList()));
+    public ApiGenericResponse<PageResponse<ItemResponse>> getAllProducts(
+            UUID restaurantId, int page, int size, String search) {
+        PageResponse<ItemDomain> result = itemServicePort.getProductsPaged(restaurantId, page, size, search);
+        return ApiGenericResponse.success(PageResponse.of(
+                result.content().stream().map(this::toResponse).toList(),
+                result.totalElements(),
+                result.number(),
+                result.size()));
     }
 
     // --------------------------------------------------------------------------
@@ -60,11 +66,19 @@ public class ItemHandlerImpl implements ItemHandler {
 
     @Override
     public ApiGenericResponse<ItemResponse> createProduct(UUID submenuId, UUID ownerId, CreateProductRequest request) {
-        boolean tracked = Boolean.TRUE.equals(request.isInventoryTracked());
+        return ApiGenericResponse.success(toResponse(itemServicePort.createProduct(submenuId, toProductDomain(ownerId, request))));
+    }
 
-        ItemDomain domain = ItemDomain.builder()
+    @Override
+    public ApiGenericResponse<ItemResponse> createProduct(UUID restaurantId, CreateProductRequest request) {
+        return ApiGenericResponse.success(toResponse(itemServicePort.createProduct(toProductDomain(restaurantId, request))));
+    }
+
+    private ItemDomain toProductDomain(UUID ownerId, CreateProductRequest request) {
+        boolean tracked = Boolean.TRUE.equals(request.isInventoryTracked());
+        return ItemDomain.builder()
                 .restaurantId(ownerId)
-                .itemClass(ItemClass.SALEABLE_PRODUCT)
+                .itemClass(ItemClass.PRODUCT)
                 .name(request.name())
                 .description(request.description())
                 .isInventoryTracked(tracked)
@@ -73,13 +87,37 @@ public class ItemHandlerImpl implements ItemHandler {
                 .yieldQty(request.yieldQty())
                 .yieldUnitId(request.yieldUnitId())
                 .recipeLines(toRecipeLineDomains(request.lines()))
+                .isActive(true)
+                .isAvailableAsTemplateOption(Boolean.TRUE.equals(request.isAvailableAsTemplateOption()))
                 .createdBy(SecurityUtils.getAuthenticatedUserId())
                 .updatedBy(SecurityUtils.getAuthenticatedUserId())
                 .build();
+    }
 
-        ItemDomain created = itemServicePort.createProduct(submenuId, domain);
+    @Override
+    public ApiGenericResponse<List<ItemResponse>> getTemplateOptions(UUID restaurantId) {
+        return ApiGenericResponse.success(itemServicePort.getTemplateOptions(restaurantId).stream().map(this::toResponse).toList());
+    }
 
-        return ApiGenericResponse.success(toResponse(created));
+    @Override
+    public ApiGenericResponse<ItemResponse> setProductActive(UUID restaurantId, UUID productId, boolean active) {
+        return ApiGenericResponse.success(toResponse(itemServicePort.setProductActive(restaurantId, productId, active, SecurityUtils.getAuthenticatedUserId())));
+    }
+
+    @Override
+    public ApiGenericResponse<ProductDependenciesResponse> getProductDependencies(UUID restaurantId, UUID productId) {
+        ProductDependenciesDomain dependencies = itemServicePort.getProductDependencies(restaurantId, productId);
+        return ApiGenericResponse.success(new ProductDependenciesResponse(
+                dependencies.publications().stream()
+                        .map(publication -> new ProductDependenciesResponse.Publication(
+                                publication.menuId(), publication.menuName(),
+                                publication.submenuId(), publication.submenuName()))
+                        .toList(),
+                dependencies.templateUsages().stream()
+                        .map(usage -> new ProductDependenciesResponse.TemplateUsage(
+                                usage.templateId(), usage.templateName(),
+                                usage.slotId(), usage.slotName()))
+                        .toList()));
     }
 
     // --------------------------------------------------------------------------
@@ -89,7 +127,18 @@ public class ItemHandlerImpl implements ItemHandler {
     @Override
     public ApiGenericResponse<ItemResponse> updateItem(UUID itemId, UpdateItemRequest request) {
         ItemDomain existing = itemServicePort.getById(itemId);
+        return updateItem(existing, request, null);
+    }
 
+    @Override
+    public ApiGenericResponse<ItemResponse> updateItem(UUID restaurantId, UUID itemId, UpdateItemRequest request) {
+        ItemDomain existing = itemServicePort.getById(restaurantId, itemId);
+        return updateItem(existing, request, restaurantId);
+    }
+
+    private ApiGenericResponse<ItemResponse> updateItem(
+            ItemDomain existing, UpdateItemRequest request, UUID restaurantId) {
+        UUID itemId = existing.getId();
         ItemDomain updateData = ItemDomain.builder()
                 .id(itemId)
                 .restaurantId(existing.getRestaurantId())
@@ -101,11 +150,16 @@ public class ItemHandlerImpl implements ItemHandler {
                 .yieldQty(request.yieldQty() != null ? request.yieldQty() : existing.getYieldQty())
                 .yieldUnitId(request.yieldUnitId() != null ? request.yieldUnitId() : existing.getYieldUnitId())
                 .theoreticalCost(request.userDefinedCost())
+                .isAvailableAsTemplateOption(request.isAvailableAsTemplateOption() != null
+                        ? request.isAvailableAsTemplateOption() : existing.isAvailableAsTemplateOption())
                 .recipeLines(request.lines() != null ? toRecipeLineDomains(request.lines()) : List.of())
                 .updatedBy(SecurityUtils.getAuthenticatedUserId())
                 .build();
 
-        return ApiGenericResponse.success(toResponse(itemServicePort.updateItem(updateData)));
+        ItemDomain updated = restaurantId == null
+                ? itemServicePort.updateItem(updateData)
+                : itemServicePort.updateItem(restaurantId, updateData);
+        return ApiGenericResponse.success(toResponse(updated));
     }
 
     @Override
@@ -115,8 +169,19 @@ public class ItemHandlerImpl implements ItemHandler {
     }
 
     @Override
+    public ApiGenericResponse<Void> deleteItem(UUID restaurantId, UUID itemId) {
+        itemServicePort.deleteItem(restaurantId, itemId);
+        return ApiGenericResponse.success(null);
+    }
+
+    @Override
     public ApiGenericResponse<ItemResponse> getById(UUID itemId) {
         return ApiGenericResponse.success(toResponse(itemServicePort.getById(itemId)));
+    }
+
+    @Override
+    public ApiGenericResponse<ItemResponse> getById(UUID restaurantId, UUID itemId) {
+        return ApiGenericResponse.success(toResponse(itemServicePort.getById(restaurantId, itemId)));
     }
 
     // --------------------------------------------------------------------------
@@ -150,6 +215,10 @@ public class ItemHandlerImpl implements ItemHandler {
                 d.getYieldUnitId(),
                 d.getSalePrice(),
                 d.getTheoreticalCost(),
+                d.isActive(),
+                d.isAvailableAsTemplateOption(),
+                d.isPublished(),
+                d.isUsedAsTemplateOption(),
                 d.getRecipeLines().stream().map(this::toLineResponse).collect(Collectors.toList()),
                 d.getCreatedAt(),
                 d.getUpdatedAt());

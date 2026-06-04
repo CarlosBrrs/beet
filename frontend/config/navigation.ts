@@ -15,7 +15,8 @@ import {
     User,
     CreditCard,
     Package,
-    CircleDollarSign
+    CircleDollarSign,
+    Blocks
 } from "lucide-react"
 import { PermissionModule } from "@/lib/permissions"
 
@@ -55,6 +56,12 @@ export const navigationConfig: NavItem[] = [
                 icon: CircleDollarSign,
                 module: PermissionModule.CASH,
             },
+            {
+                title: "Tables",
+                href: "/tables",
+                icon: LayoutGrid,
+                module: PermissionModule.TABLES,
+            },
         ]
     },
     {
@@ -78,6 +85,12 @@ export const navigationConfig: NavItem[] = [
                 icon: Package,
                 module: PermissionModule.PRODUCTS,
             },
+            {
+                title: "Armables",
+                href: "/templates",
+                icon: Blocks,
+                module: PermissionModule.TEMPLATES,
+            },
         ]
     },
     {
@@ -88,12 +101,6 @@ export const navigationConfig: NavItem[] = [
                 href: "/pos",
                 icon: Store,
                 module: PermissionModule.ORDERS,
-            },
-            {
-                title: "Tables",
-                href: "/tables",
-                icon: LayoutGrid,
-                module: PermissionModule.TABLES,
             },
             {
                 title: "Live Orders (KDS)",
@@ -184,7 +191,7 @@ export const accountNavigationConfig: NavItem[] = [
                 title: "Recipes",
                 href: "/account/recipes",
                 icon: ChefHat,
-                module: PermissionModule.RECIPES,
+                module: PermissionModule.PREPARATIONS,
             },
             {
                 title: "Products",

@@ -18,7 +18,9 @@ import com.beet.backend.modules.order.domain.model.OrderStatus;
 import com.beet.backend.modules.order.domain.model.OrderTaxDefinition;
 import com.beet.backend.modules.order.domain.model.OrderTaxDomain;
 import com.beet.backend.modules.order.domain.model.PaymentStatus;
+import com.beet.backend.modules.order.domain.model.ServiceType;
 import com.beet.backend.modules.order.domain.spi.OrderPersistencePort;
+import com.beet.backend.modules.order.domain.spi.OrderTableGateway;
 import com.beet.backend.modules.order.domain.spi.OrderTaxQueryPort;
 import com.beet.backend.modules.restaurant.domain.exception.RestaurantNotFoundException;
 import com.beet.backend.modules.restaurant.domain.model.RestaurantDomain;
@@ -50,11 +52,13 @@ public class OrderUseCase implements OrderServicePort {
     private final RestaurantPersistencePort restaurantPersistence;
     private final ItemPersistencePort itemPersistence;
     private final SubmenuNodeQueryPort submenuNodeQuery;
+    private final OrderTableGateway tableGateway;
 
     @Override
     @Transactional
     public OrderDomain createOrder(OrderDomain order, UUID userId) {
         RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
+        validateTableContext(order);
         if (order.getCashSessionId() == null) {
             throw new IllegalArgumentException("Order must be linked to an active cash session.");
         }
@@ -230,6 +234,22 @@ public class OrderUseCase implements OrderServicePort {
                 .orElseThrow(() -> RestaurantNotFoundException.forId(restaurantId));
     }
 
+    private void validateTableContext(OrderDomain order) {
+        if (order.getServiceType() == null) {
+            throw new IllegalArgumentException("Order must include a service type.");
+        }
+        if (order.getServiceType() == ServiceType.DINE_IN) {
+            if (order.getTableId() == null) {
+                throw new IllegalArgumentException("Dine-in order must include a restaurant table.");
+            }
+            tableGateway.validateAvailableForOrder(order.getRestaurantId(), order.getTableId());
+            return;
+        }
+        if (order.getTableId() != null) {
+            throw new IllegalArgumentException("Only dine-in orders can include a restaurant table.");
+        }
+    }
+
     private OrderDomain loadOrder(UUID restaurantId, UUID orderId) {
         return findById(restaurantId, orderId)
                 .orElseThrow(() -> OrderNotFoundException.forId(orderId));
@@ -260,7 +280,7 @@ public class OrderUseCase implements OrderServicePort {
         if (!restaurantId.equals(sourceItem.getRestaurantId())) {
             throw new IllegalArgumentException("Item does not belong to the restaurant.");
         }
-        if (sourceItem.getItemClass() != ItemClass.SALEABLE_PRODUCT) {
+        if (sourceItem.getItemClass() != ItemClass.PRODUCT) {
             throw new IllegalArgumentException("Only saleable products can be added to orders.");
         }
 

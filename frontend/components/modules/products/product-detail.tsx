@@ -48,7 +48,7 @@ export function ProductDetail({ menuId, submenuId, productId }: ProductDetailPro
                     <p className="text-lg font-semibold">{formatCurrency(product.salePrice || 0)}</p>
                 </div>
                 <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Rendimiento (Porciones)</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground">Cantidad producida</h4>
                     <p className="text-lg">{product.yieldQty ? `${product.yieldQty} ` : "-"}</p>
                 </div>
             </div>

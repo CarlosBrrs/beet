@@ -6,9 +6,11 @@ import com.beet.backend.modules.item.domain.exception.ItemNotFoundException;
 import com.beet.backend.modules.item.domain.exception.ItemValidationException;
 import com.beet.backend.modules.item.domain.model.ItemClass;
 import com.beet.backend.modules.item.domain.model.ItemDomain;
+import com.beet.backend.modules.item.domain.model.ProductDependenciesDomain;
 import com.beet.backend.modules.item.domain.model.RecipeLineDomain;
 import com.beet.backend.modules.item.domain.model.RecipeLineSource;
 import com.beet.backend.modules.item.domain.spi.ItemPersistencePort;
+import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,11 +48,22 @@ public class ItemUseCase implements ItemServicePort {
     @Override
     @Transactional
     public ItemDomain createProduct(UUID submenuId, ItemDomain item) {
+        if (item.getSalePrice() == null || item.getSalePrice().signum() <= 0) {
+            throw new IllegalArgumentException("Published products require a sale price greater than zero.");
+        }
+        ItemDomain saved = createProduct(item);
+        itemPersistencePort.saveSubmenuNode(submenuId, saved.getId());
+        saved.setPublished(true);
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public ItemDomain createProduct(ItemDomain item) {
         guardDuplicateName(item.getName(), item.getRestaurantId());
         prepareProductForCreate(item);
 
         ItemDomain saved = itemPersistencePort.save(item);
-        itemPersistencePort.saveSubmenuNode(submenuId, saved.getId());
 
         if (item.isInventoryTracked() && !item.getRecipeLines().isEmpty()) {
             saveRecipeLines(saved.getId(), item.getRecipeLines());
@@ -60,6 +73,28 @@ public class ItemUseCase implements ItemServicePort {
             return itemPersistencePort.update(saved);
         }
         return saved;
+    }
+
+    @Override
+    public List<ItemDomain> getTemplateOptions(UUID restaurantId) {
+        List<ItemDomain> options = itemPersistencePort.findTemplateOptions(restaurantId);
+        options.forEach(this::decorateCatalogState);
+        return options;
+    }
+
+    @Override
+    @Transactional
+    public ItemDomain setProductActive(UUID restaurantId, UUID itemId, boolean active, UUID userId) {
+        ItemDomain item = itemPersistencePort.findById(itemId)
+                .filter(found -> restaurantId.equals(found.getRestaurantId()))
+                .orElseThrow(() -> ItemNotFoundException.forId(itemId));
+        if (!active && (itemPersistencePort.isPublished(restaurantId, itemId)
+                || itemPersistencePort.isUsedAsTemplateOption(restaurantId, itemId))) {
+            throw new IllegalArgumentException("Remove product publications and template usages before deactivating it.");
+        }
+        itemPersistencePort.updateActivation(restaurantId, itemId, active, userId);
+        item.setActive(active);
+        return decorateCatalogState(item);
     }
 
     @Override
@@ -79,6 +114,17 @@ public class ItemUseCase implements ItemServicePort {
         existing.setYieldQty(item.getYieldQty());
         existing.setYieldUnitId(item.getYieldUnitId());
         existing.setSalePrice(item.getSalePrice());
+        if (existing.getItemClass() == ItemClass.PRODUCT
+                && itemPersistencePort.isPublished(existing.getRestaurantId(), existing.getId())
+                && (item.getSalePrice() == null || item.getSalePrice().signum() <= 0)) {
+            throw new IllegalArgumentException("Published products require a sale price greater than zero.");
+        }
+        if (existing.isAvailableAsTemplateOption() && !item.isAvailableAsTemplateOption()
+                && itemPersistencePort.isUsedAsTemplateOption(existing.getRestaurantId(), existing.getId())) {
+            throw new IllegalArgumentException("Remove the product from template slots before disabling template eligibility.");
+        }
+        existing.setAvailableAsTemplateOption(item.isAvailableAsTemplateOption());
+        existing.setUpdatedBy(item.getUpdatedBy());
 
         // Replace recipe lines
         itemPersistencePort.deleteRecipeLinesByParent(existing.getId());
@@ -95,7 +141,14 @@ public class ItemUseCase implements ItemServicePort {
             existing.setTheoreticalCost(calculateBomCost(existing));
         }
 
-        return itemPersistencePort.update(existing);
+        return decorateCatalogState(itemPersistencePort.update(existing));
+    }
+
+    @Override
+    @Transactional
+    public ItemDomain updateItem(UUID restaurantId, ItemDomain item) {
+        getById(restaurantId, item.getId());
+        return updateItem(item);
     }
 
     @Override
@@ -107,17 +160,36 @@ public class ItemUseCase implements ItemServicePort {
     }
 
     @Override
+    @Transactional
+    public void deleteItem(UUID restaurantId, UUID id) {
+        getById(restaurantId, id);
+        deleteItem(id);
+    }
+
+    @Override
     public ItemDomain getById(UUID id) {
         ItemDomain item = itemPersistencePort.findById(id)
                 .orElseThrow(() -> ItemNotFoundException.forId(id));
         item.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(id));
+        return decorateCatalogState(item);
+    }
+
+    @Override
+    public ItemDomain getById(UUID restaurantId, UUID id) {
+        ItemDomain item = getById(id);
+        if (!restaurantId.equals(item.getRestaurantId())) {
+            throw ItemNotFoundException.forId(id);
+        }
         return item;
     }
 
     @Override
     public List<ItemDomain> getAllByRestaurantAndClass(UUID restaurantId, ItemClass itemClass) {
         List<ItemDomain> items = itemPersistencePort.findAllByRestaurantAndClass(restaurantId, itemClass);
-        items.forEach(item -> item.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(item.getId())));
+        items.forEach(item -> {
+            item.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(item.getId()));
+            decorateCatalogState(item);
+        });
         return items;
     }
 
@@ -129,6 +201,38 @@ public class ItemUseCase implements ItemServicePort {
         if (itemPersistencePort.existsByNameAndRestaurant(name, restaurantId)) {
             throw ItemAlreadyExistsException.forName(name);
         }
+    }
+
+    @Override
+    public PageResponse<ItemDomain> getProductsPaged(UUID restaurantId, int page, int size, String search) {
+        validatePagination(page, size);
+        PageResponse<ItemDomain> products = itemPersistencePort.findAllByRestaurantAndClassPaged(
+                restaurantId, ItemClass.PRODUCT, page, size, search);
+        products.content().forEach(this::decorateCatalogState);
+        return products;
+    }
+
+    @Override
+    public ProductDependenciesDomain getProductDependencies(UUID restaurantId, UUID itemId) {
+        ItemDomain item = getById(restaurantId, itemId);
+        if (item.getItemClass() != ItemClass.PRODUCT) {
+            throw ItemNotFoundException.forId(itemId);
+        }
+        return itemPersistencePort.findDependencies(restaurantId, itemId);
+    }
+
+    private void validatePagination(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) {
+            throw new IllegalArgumentException("Pagination requires page >= 0 and size between 1 and 200.");
+        }
+    }
+
+    private ItemDomain decorateCatalogState(ItemDomain item) {
+        if (item.getItemClass() == ItemClass.PRODUCT) {
+            item.setPublished(itemPersistencePort.isPublished(item.getRestaurantId(), item.getId()));
+            item.setUsedAsTemplateOption(itemPersistencePort.isUsedAsTemplateOption(item.getRestaurantId(), item.getId()));
+        }
+        return item;
     }
 
     private void prepareProductForCreate(ItemDomain item) {

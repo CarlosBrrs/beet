@@ -5,12 +5,12 @@ import com.beet.backend.modules.item.application.handler.ItemHandler;
 import com.beet.backend.modules.role.domain.model.PermissionAction;
 import com.beet.backend.modules.role.domain.model.PermissionModule;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
+import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import com.beet.backend.shared.infrastructure.security.RequiresPermission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -28,14 +28,17 @@ public class ItemController {
     private final ItemHandler itemHandler;
 
     /**
-     * Returns all SALEABLE_PRODUCT items for a restaurant.
+     * Returns all PRODUCT items for a restaurant.
      * Used by the global Products Hub page to display a read-only overview.
      */
     @GetMapping
-    @RequiresPermission(module = PermissionModule.RECIPES, action = PermissionAction.VIEW)
-    public ResponseEntity<ApiGenericResponse<List<ItemResponse>>> getAllProducts(
-            @PathVariable UUID restaurantId) {
-        return ResponseEntity.ok(itemHandler.getAllProducts(restaurantId));
+    @RequiresPermission(module = PermissionModule.PRODUCTS, action = PermissionAction.VIEW)
+    public ResponseEntity<ApiGenericResponse<PageResponse<ItemResponse>>> getAllProducts(
+            @PathVariable UUID restaurantId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(itemHandler.getAllProducts(restaurantId, page, size, search));
     }
 
     /**
@@ -43,10 +46,10 @@ public class ItemController {
      * Used by the ProductHubDetail sheet to display the recipe composition.
      */
     @GetMapping("/{itemId}")
-    @RequiresPermission(module = PermissionModule.RECIPES, action = PermissionAction.VIEW)
+    @RequiresPermission(module = PermissionModule.PRODUCTS, action = PermissionAction.VIEW)
     public ResponseEntity<ApiGenericResponse<ItemResponse>> getById(
             @PathVariable UUID restaurantId,
             @PathVariable UUID itemId) {
-        return ResponseEntity.ok(itemHandler.getById(itemId));
+        return ResponseEntity.ok(itemHandler.getById(restaurantId, itemId));
     }
 }

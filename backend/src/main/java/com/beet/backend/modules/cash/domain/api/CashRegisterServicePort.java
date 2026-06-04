@@ -12,6 +12,8 @@ public interface CashRegisterServicePort {
 
     CashRegisterDomain deactivate(UUID restaurantId, UUID registerId, UUID updatedBy);
 
+    CashRegisterDomain releaseDeviceBinding(UUID restaurantId, UUID registerId, UUID updatedBy);
+
     CashRegisterDomain getById(UUID registerId);
 
     List<CashRegisterDomain> listByRestaurant(UUID restaurantId);

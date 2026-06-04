@@ -31,8 +31,12 @@ public class ItemDomain {
     private UUID yieldUnitId;
 
     // Pricing
-    private BigDecimal salePrice; // Set by user (SALEABLE_PRODUCT only)
+    private BigDecimal salePrice; // Set by user (PRODUCT only)
     private BigDecimal theoreticalCost; // Calculated by system (or entered if flat)
+    private boolean isActive;
+    private boolean isAvailableAsTemplateOption;
+    private boolean isPublished;
+    private boolean isUsedAsTemplateOption;
 
     // Audit
     private OffsetDateTime createdAt;

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
     Form,
     FormControl,
+    FormDescription,
     FormField,
     FormItem,
     FormLabel,
@@ -257,7 +258,7 @@ export function PreparationForm({ initialData, onSuccess }: PreparationFormProps
                         name="yieldQty"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Rendimiento</FormLabel>
+                                <FormLabel>Cantidad obtenida</FormLabel>
                                 <FormControl>
                                     <Input
                                         placeholder="Ej: 1.5"
@@ -267,6 +268,9 @@ export function PreparationForm({ initialData, onSuccess }: PreparationFormProps
                                         }}
                                     />
                                 </FormControl>
+                                <FormDescription>
+                                    Total producido por la receta. Ej.: 2,5 l de salsa o 20 pcs de masa.
+                                </FormDescription>
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -276,7 +280,7 @@ export function PreparationForm({ initialData, onSuccess }: PreparationFormProps
                         name="yieldUnitId"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Unidad de rendimiento</FormLabel>
+                                <FormLabel>Unidad obtenida</FormLabel>
                                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                                     <FormControl>
                                         <SelectTrigger>

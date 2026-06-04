@@ -6,7 +6,6 @@ import com.beet.backend.modules.cash.application.dto.CashSessionResponse;
 import com.beet.backend.modules.cash.application.dto.CloseCashSessionRequest;
 import com.beet.backend.modules.cash.application.dto.CreateCashRegisterRequest;
 import com.beet.backend.modules.cash.application.dto.OpenCashSessionRequest;
-import com.beet.backend.modules.cash.application.dto.RebindCashSessionRequest;
 import com.beet.backend.modules.cash.application.dto.UpdateCashRegisterRequest;
 import com.beet.backend.modules.cash.domain.model.CashSessionStatus;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
@@ -26,6 +25,8 @@ public interface CashHandler {
 
     ApiGenericResponse<CashRegisterResponse> deactivateRegister(UUID restaurantId, UUID registerId);
 
+    ApiGenericResponse<CashRegisterResponse> releaseRegisterDeviceBinding(UUID restaurantId, UUID registerId);
+
     ApiGenericResponse<CashSessionResponse> openSession(UUID restaurantId, OpenCashSessionRequest request);
 
     ApiGenericResponse<CashSessionResponse> closeSession(
@@ -33,9 +34,6 @@ public interface CashHandler {
 
     ApiGenericResponse<CashSessionResponse> forceCloseSession(
             UUID restaurantId, UUID sessionId, CloseCashSessionRequest request);
-
-    ApiGenericResponse<CashSessionResponse> rebindSession(
-            UUID restaurantId, UUID sessionId, RebindCashSessionRequest request);
 
     ApiGenericResponse<CashSessionResponse> getActiveSession(UUID restaurantId);
 

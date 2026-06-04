@@ -15,5 +15,5 @@ public record CreateSlotRequest(
 
         int sortOrder,
 
-        @NotNull @Valid List<CreateSlotOptionRequest> options) {
+        @NotNull @Size(min = 1, message = "At least one option is required") @Valid List<CreateSlotOptionRequest> options) {
 }

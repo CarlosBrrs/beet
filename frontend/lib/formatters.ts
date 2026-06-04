@@ -51,14 +51,27 @@ export function formatNumber(value: number, maxDecimals = 4): string {
  * @example formatPriceDisplay("80000,25") → "80.000,25"
  */
 export function formatPriceDisplay(value: string): string {
-    // Strip non-numeric except comma and dot
+    return formatNumberInput(value, 2)
+}
+
+/**
+ * Formats an inventory quantity with up to four decimal places.
+ *
+ * @example formatQuantityDisplay("1250,5") -> "1.250,5"
+ */
+export function formatQuantityDisplay(value: string): string {
+    return formatNumberInput(value, 4)
+}
+
+function formatNumberInput(value: string, maxDecimals: number): string {
+    // Strip non-numeric except comma and dot.
     const cleaned = value.replace(/[^0-9.,]/g, "")
     if (!cleaned) return ""
 
     // Split on comma (decimal separator in Colombian format)
     const parts = cleaned.split(",")
     const intPart = parts[0].replace(/\./g, "") // remove existing dots
-    const decPart = parts[1]?.slice(0, 2) // max 2 decimals
+    const decPart = parts[1]?.slice(0, maxDecimals)
 
     // Add thousands dots
     const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".")

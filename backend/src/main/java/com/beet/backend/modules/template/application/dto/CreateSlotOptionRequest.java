@@ -12,6 +12,7 @@ public record CreateSlotOptionRequest(
         @PositiveOrZero @Digits(integer = 12, fraction = 2) BigDecimal surcharge,
 
         boolean isDefault,
+        @Min(1) int maxQuantity,
 
         int sortOrder) {
 }

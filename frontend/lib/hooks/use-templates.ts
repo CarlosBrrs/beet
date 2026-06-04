@@ -1,57 +1,97 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import {
     ApiGenericResponse,
     TemplateResponse,
     CreateTemplateRequest,
+    PageResponse,
 } from "@/lib/api-types";
 import { useRestaurantContext } from "@/components/providers/restaurant-provider";
 import { toast } from "sonner";
 
-// ── Query Keys ──
-
 export const templateKeys = {
     all: ["templates"] as const,
-    detail: (id: string) => [...templateKeys.all, "detail", id] as const,
+    list: (restaurantId: string | null, params?: { page?: number; size?: number; search?: string }) =>
+        [...templateKeys.all, "list", restaurantId, params] as const,
+    detail: (restaurantId: string | null, id: string) =>
+        [...templateKeys.all, "detail", restaurantId, id] as const,
 };
 
-// ── Fetch Functions ──
-
-async function createTemplateRequest(
-    restaurantId: string,
-    menuId: string,
-    submenuId: string,
-    request: CreateTemplateRequest
-): Promise<TemplateResponse> {
-    const data = await apiClient<ApiGenericResponse<TemplateResponse>>(
-        `/restaurants/${restaurantId}/menus/${menuId}/submenus/${submenuId}/templates`,
-        { method: "POST", body: JSON.stringify(request) }
-    );
-    return data.data;
+async function request<T>(url: string, init?: { method?: string; body?: string }): Promise<T> {
+    const response = await apiClient<ApiGenericResponse<T>>(url, init);
+    return response.data;
 }
 
-// ── Hooks ──
+export function useTemplates(params?: { page?: number; size?: number; search?: string }) {
+    const { restaurantId } = useRestaurantContext();
+    const searchParams = new URLSearchParams();
+    if (params?.page !== undefined) searchParams.set("page", String(params.page));
+    if (params?.size !== undefined) searchParams.set("size", String(params.size));
+    if (params?.search) searchParams.set("search", params.search);
+    const queryString = searchParams.toString();
+    return useQuery({
+        queryKey: templateKeys.list(restaurantId, params),
+        queryFn: () => request<PageResponse<TemplateResponse>>(`/restaurants/${restaurantId}/templates${queryString ? `?${queryString}` : ""}`),
+        enabled: !!restaurantId,
+    });
+}
 
-export function useCreateTemplate() {
+export function useTemplate(templateId?: string | null) {
+    const { restaurantId } = useRestaurantContext();
+    return useQuery({
+        queryKey: templateKeys.detail(restaurantId, templateId ?? ""),
+        queryFn: () => request<TemplateResponse>(`/restaurants/${restaurantId}/templates/${templateId}`),
+        enabled: !!restaurantId && !!templateId,
+    });
+}
+
+export function useCreateCatalogTemplate() {
     const queryClient = useQueryClient();
     const { restaurantId } = useRestaurantContext();
-
     return useMutation({
-        mutationFn: ({
-            menuId,
-            submenuId,
-            data,
-        }: {
-            menuId: string;
-            submenuId: string;
-            data: CreateTemplateRequest;
-        }) => createTemplateRequest(restaurantId!, menuId, submenuId, data),
+        mutationFn: (payload: CreateTemplateRequest) =>
+            request<TemplateResponse>(`/restaurants/${restaurantId}/templates`, {
+                method: "POST",
+                body: JSON.stringify(payload),
+            }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: templateKeys.all });
-            toast.success("Template creado exitosamente");
+            toast.success("Plantilla creada exitosamente");
         },
-        onError: (error: any) => {
-            toast.error(error.message || "Error al crear el template");
+        onError: (error: Error) => toast.error(error.message || "Error al crear la plantilla"),
+    });
+}
+
+export function useUpdateTemplate(templateId: string) {
+    const queryClient = useQueryClient();
+    const { restaurantId } = useRestaurantContext();
+    return useMutation({
+        mutationFn: (payload: CreateTemplateRequest) =>
+            request<TemplateResponse>(`/restaurants/${restaurantId}/templates/${templateId}`, {
+                method: "PUT",
+                body: JSON.stringify(payload),
+            }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: templateKeys.all });
+            toast.success("Plantilla actualizada exitosamente");
         },
+        onError: (error: Error) => toast.error(error.message || "Error al actualizar la plantilla"),
+    });
+}
+
+export function useSetTemplateActive() {
+    const queryClient = useQueryClient();
+    const { restaurantId } = useRestaurantContext();
+    return useMutation({
+        mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+            request<TemplateResponse>(`/restaurants/${restaurantId}/templates/${id}/activation`, {
+                method: "PATCH",
+                body: JSON.stringify({ isActive }),
+            }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: templateKeys.all });
+            toast.success("Estado de la plantilla actualizado");
+        },
+        onError: (error: Error) => toast.error(error.message || "No fue posible actualizar la plantilla"),
     });
 }

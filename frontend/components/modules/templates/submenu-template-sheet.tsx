@@ -36,6 +36,7 @@ export function SubmenuTemplateSheet({
                 <TemplateForm
                     menuId={menuId}
                     submenuId={submenuId}
+                    templateId={nodeId}
                     onSuccess={() => onOpenChange(false)}
                 />
             </div>

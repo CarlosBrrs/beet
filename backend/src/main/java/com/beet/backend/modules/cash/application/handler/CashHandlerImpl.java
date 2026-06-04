@@ -6,7 +6,6 @@ import com.beet.backend.modules.cash.application.dto.CashSessionResponse;
 import com.beet.backend.modules.cash.application.dto.CloseCashSessionRequest;
 import com.beet.backend.modules.cash.application.dto.CreateCashRegisterRequest;
 import com.beet.backend.modules.cash.application.dto.OpenCashSessionRequest;
-import com.beet.backend.modules.cash.application.dto.RebindCashSessionRequest;
 import com.beet.backend.modules.cash.application.dto.UpdateCashRegisterRequest;
 import com.beet.backend.modules.cash.domain.api.CashRegisterServicePort;
 import com.beet.backend.modules.cash.domain.api.CashSessionQueryPort;
@@ -52,7 +51,6 @@ public class CashHandlerImpl implements CashHandler {
         CashRegisterDomain created = registerService.create(CashRegisterDomain.builder()
                 .restaurantId(restaurantId)
                 .name(request.name())
-                .deviceId(request.deviceId())
                 .notes(request.notes())
                 .isActive(true)
                 .createdBy(userId)
@@ -76,7 +74,6 @@ public class CashHandlerImpl implements CashHandler {
                 .id(registerId)
                 .restaurantId(restaurantId)
                 .name(request.name())
-                .deviceId(request.deviceId())
                 .isActive(request.isActive())
                 .notes(request.notes())
                 .updatedBy(SecurityUtils.getAuthenticatedUserId())
@@ -91,6 +88,16 @@ public class CashHandlerImpl implements CashHandler {
                 registerId,
                 SecurityUtils.getAuthenticatedUserId());
         return ApiGenericResponse.success(toRegisterResponse(deactivated));
+    }
+
+    @Override
+    public ApiGenericResponse<CashRegisterResponse> releaseRegisterDeviceBinding(
+            UUID restaurantId, UUID registerId) {
+        CashRegisterDomain released = registerService.releaseDeviceBinding(
+                restaurantId,
+                registerId,
+                SecurityUtils.getAuthenticatedUserId());
+        return ApiGenericResponse.success(toRegisterResponse(released));
     }
 
     @Override
@@ -129,17 +136,6 @@ public class CashHandlerImpl implements CashHandler {
                 request.closingAmount(),
                 request.notes());
         return ApiGenericResponse.success(toSessionResponse(closed));
-    }
-
-    @Override
-    public ApiGenericResponse<CashSessionResponse> rebindSession(
-            UUID restaurantId, UUID sessionId, RebindCashSessionRequest request) {
-        CashSessionDomain rebound = sessionService.rebindSession(
-                restaurantId,
-                sessionId,
-                SecurityUtils.getAuthenticatedUserId(),
-                request.newDeviceId());
-        return ApiGenericResponse.success(toSessionResponse(rebound));
     }
 
     @Override

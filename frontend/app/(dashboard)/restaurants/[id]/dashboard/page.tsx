@@ -4,6 +4,7 @@ import { useRestaurantContext } from "@/components/providers/restaurant-provider
 import { useMyPermissions } from "@/lib/hooks/use-my-permissions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CatalogRoadmapNote } from "@/components/modules/catalog/catalog-roadmap-note"
 
 export default function RestaurantDashboard() {
     const { restaurantId } = useRestaurantContext()
@@ -60,6 +61,8 @@ export default function RestaurantDashboard() {
                     </CardContent>
                 </Card>
             </div>
+
+            <CatalogRoadmapNote />
         </div>
     )
 }

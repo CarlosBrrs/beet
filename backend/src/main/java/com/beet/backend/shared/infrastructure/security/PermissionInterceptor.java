@@ -17,6 +17,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.List;
 import java.util.UUID;
+import java.util.Arrays;
 
 /**
  * AOP interceptor that enforces @RequiresPermission annotations on controller
@@ -49,7 +50,22 @@ public class PermissionInterceptor {
         // DB queries within a session
         List<UserPermissionEntry> permissions = rolePersistencePort.findAllPermissionsForUser(userId);
 
-        boolean authorized = permissions.stream().anyMatch(entry -> {
+        boolean authorized = hasPermission(permissions, restaurantId, requiredModule, requiredAction)
+                && Arrays.stream(requiresPermission.additional())
+                        .allMatch(requirement -> hasPermission(
+                                permissions, restaurantId, requirement.module(), requirement.action()));
+
+        if (!authorized) {
+            throw AccessDeniedException.forPermission(
+                    requiredModule.name(), requiredAction.name(), restaurantId.toString());
+        }
+
+        return joinPoint.proceed();
+    }
+
+    private boolean hasPermission(List<UserPermissionEntry> permissions, UUID restaurantId,
+            PermissionModule requiredModule, PermissionAction requiredAction) {
+        return permissions.stream().anyMatch(entry -> {
             // Check global OWNER entry (restaurantId = null, ALL:ALL)
             if (entry.restaurantId() == null) {
                 List<PermissionAction> allActions = entry.permissions().get(PermissionModule.ALL);
@@ -69,13 +85,6 @@ public class PermissionInterceptor {
 
             return false;
         });
-
-        if (!authorized) {
-            throw AccessDeniedException.forPermission(
-                    requiredModule.name(), requiredAction.name(), restaurantId.toString());
-        }
-
-        return joinPoint.proceed();
     }
 
     /**

@@ -22,4 +22,6 @@ public @interface RequiresPermission {
     PermissionModule module();
 
     PermissionAction action();
+
+    PermissionRequirement[] additional() default {};
 }

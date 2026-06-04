@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { CirclePlus, Loader2, MonitorSmartphone, Pencil, Power, PowerOff } from "lucide-react"
+import { CirclePlus, Loader2, MonitorSmartphone, Pencil, Power, PowerOff, Unplug } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Can } from "@/components/shared/can"
@@ -14,6 +14,7 @@ import { CashRegisterResponse } from "@/lib/api-types"
 import {
     useCashRegisters,
     useDeactivateCashRegister,
+    useReleaseCashRegisterDeviceBinding,
     useUpdateCashRegister,
 } from "@/lib/hooks/use-cash-registers"
 
@@ -34,6 +35,7 @@ const createColumns = (
     onEdit: (register: CashRegisterResponse) => void,
     onDeactivate: (register: CashRegisterResponse) => void,
     onReactivate: (register: CashRegisterResponse) => void,
+    onReleaseDevice: (register: CashRegisterResponse) => void,
 ): ColumnDef<CashRegisterResponse>[] => [
     {
         accessorKey: "name",
@@ -98,6 +100,18 @@ const createColumns = (
                             <Pencil className="h-4 w-4" />
                         </Button>
                     </Can>
+                    {register.deviceId && (
+                        <Can I="MANAGE" a="CASH">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Release device"
+                                onClick={() => onReleaseDevice(register)}
+                            >
+                                <Unplug className="h-4 w-4" />
+                            </Button>
+                        </Can>
+                    )}
                     {register.isActive ? (
                         <Can I="DELETE" a="CASH">
                             <Button
@@ -130,10 +144,12 @@ const createColumns = (
 export function CashRegisterList() {
     const { data: registers = [], isLoading, isError, error } = useCashRegisters()
     const deactivateRegister = useDeactivateCashRegister()
+    const releaseDeviceBinding = useReleaseCashRegisterDeviceBinding()
     const updateRegister = useUpdateCashRegister()
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingRegister, setEditingRegister] = useState<CashRegisterResponse | null>(null)
     const [deactivationTarget, setDeactivationTarget] = useState<CashRegisterResponse | null>(null)
+    const [releaseTarget, setReleaseTarget] = useState<CashRegisterResponse | null>(null)
 
     const columns = useMemo(
         () => createColumns(
@@ -143,6 +159,7 @@ export function CashRegisterList() {
             },
             setDeactivationTarget,
             (register) => updateRegister.mutate({ id: register.id, request: { isActive: true } }),
+            setReleaseTarget,
         ),
         [updateRegister]
     )
@@ -205,6 +222,20 @@ export function CashRegisterList() {
                 onConfirm={async () => {
                     if (!deactivationTarget) return
                     await deactivateRegister.mutateAsync(deactivationTarget.id)
+                }}
+            />
+
+            <ConfirmDialog
+                open={!!releaseTarget}
+                onOpenChange={(open) => {
+                    if (!open) setReleaseTarget(null)
+                }}
+                title="Release assigned device?"
+                description={`The cash register "${releaseTarget?.name ?? ""}" will be available for another device.`}
+                confirmText="Release device"
+                onConfirm={async () => {
+                    if (!releaseTarget) return
+                    await releaseDeviceBinding.mutateAsync(releaseTarget.id)
                 }}
             />
         </>

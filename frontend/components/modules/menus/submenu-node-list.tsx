@@ -3,8 +3,10 @@
 import { useSubmenuNodes, useDeleteSubmenuNode } from "@/lib/hooks/use-submenu-nodes"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, Plus, GripVertical, Trash2, Box, Layers, Eye, Pencil } from "lucide-react"
+import { Loader2, Plus, GripVertical, Trash2, Box, Layers, Eye, Pencil, Info } from "lucide-react"
 import { formatNumber } from "@/lib/formatters"
+import { Can } from "@/components/shared/can"
+import { PermissionAction, PermissionModule } from "@/lib/permissions"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -28,11 +30,13 @@ interface SubmenuNodeListProps {
     submenuId: string
     onAddProduct: () => void
     onAddTemplate: () => void
+    onPublishProduct: () => void
+    onPublishTemplate: () => void
     onViewNode: (nodeId: string, type: "PRODUCT" | "TEMPLATE") => void
     onEditNode: (nodeId: string, type: "PRODUCT" | "TEMPLATE") => void
 }
 
-export function SubmenuNodeList({ menuId, submenuId, onAddProduct, onAddTemplate, onViewNode, onEditNode }: SubmenuNodeListProps) {
+export function SubmenuNodeList({ menuId, submenuId, onAddProduct, onAddTemplate, onPublishProduct, onPublishTemplate, onViewNode, onEditNode }: SubmenuNodeListProps) {
     const { data: nodes, isLoading } = useSubmenuNodes(menuId, submenuId)
     const deleteNode = useDeleteSubmenuNode(menuId, submenuId)
 
@@ -60,16 +64,31 @@ export function SubmenuNodeList({ menuId, submenuId, onAddProduct, onAddTemplate
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={onAddProduct}>
+                        <Can I={PermissionAction.EDIT} a={PermissionModule.MENUS}><Can I={PermissionAction.CREATE} a={PermissionModule.PRODUCTS}><DropdownMenuItem onClick={onAddProduct}>
                             <Box className="mr-2 h-4 w-4 text-emerald-500" />
-                            Producto
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={onAddTemplate}>
+                            Crear producto
+                        </DropdownMenuItem></Can></Can>
+                        <Can I={PermissionAction.EDIT} a={PermissionModule.MENUS}><DropdownMenuItem onClick={onPublishProduct}>
+                            <Box className="mr-2 h-4 w-4 text-emerald-500" />
+                            Publicar producto existente
+                        </DropdownMenuItem></Can>
+                        <Can I={PermissionAction.EDIT} a={PermissionModule.MENUS}><Can I={PermissionAction.CREATE} a={PermissionModule.TEMPLATES}><DropdownMenuItem onClick={onAddTemplate}>
                             <Layers className="mr-2 h-4 w-4 text-indigo-500" />
-                            Plantilla / Combo
-                        </DropdownMenuItem>
+                            Crear plantilla / combo
+                        </DropdownMenuItem></Can></Can>
+                        <Can I={PermissionAction.EDIT} a={PermissionModule.MENUS}><DropdownMenuItem onClick={onPublishTemplate}>
+                            <Layers className="mr-2 h-4 w-4 text-indigo-500" />
+                            Publicar armable existente
+                        </DropdownMenuItem></Can>
                     </DropdownMenuContent>
                 </DropdownMenu>
+            </div>
+
+            <div className="flex gap-3 border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                    Crear agrega un nuevo elemento y lo publica aqui. Publicar existente reutiliza uno del catalogo. Remover lo retira de este submenu, pero conserva su informacion.
+                </p>
             </div>
 
             {isEmpty ? (
@@ -125,7 +144,7 @@ export function SubmenuNodeList({ menuId, submenuId, onAddProduct, onAddTemplate
                                                 </p>
                                             </div>
                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Button
+                                                <Can I={PermissionAction.EDIT} a={isProduct ? PermissionModule.PRODUCTS : PermissionModule.TEMPLATES}><Button
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-8 w-8"
@@ -146,9 +165,9 @@ export function SubmenuNodeList({ menuId, submenuId, onAddProduct, onAddTemplate
                                                     }}
                                                 >
                                                     <Pencil className="h-4 w-4" />
-                                                </Button>
+                                                </Button></Can>
 
-                                                <AlertDialog>
+                                                <Can I={PermissionAction.EDIT} a={PermissionModule.MENUS}><AlertDialog>
                                                     <AlertDialogTrigger asChild>
                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
                                                             <Trash2 className="h-4 w-4" />
@@ -172,7 +191,7 @@ export function SubmenuNodeList({ menuId, submenuId, onAddProduct, onAddTemplate
                                                             </AlertDialogAction>
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
-                                                </AlertDialog>
+                                                </AlertDialog></Can>
                                             </div>
                                         </div>
                                     </div>

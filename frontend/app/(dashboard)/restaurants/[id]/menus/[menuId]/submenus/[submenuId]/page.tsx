@@ -7,6 +7,7 @@ import { ArrowLeft, Loader2 } from "lucide-react"
 import { SubmenuNodeList } from "@/components/modules/menus/submenu-node-list"
 import { SubmenuProductSheet } from "@/components/modules/products/submenu-product-sheet"
 import { SubmenuTemplateSheet } from "@/components/modules/templates/submenu-template-sheet"
+import { PublishCatalogNodeSheet } from "@/components/modules/menus/publish-catalog-node-sheet"
 import { useState } from "react"
 
 export default function SubmenuDetailPage() {
@@ -29,6 +30,8 @@ export default function SubmenuDetailPage() {
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
     const [selectedNodeType, setSelectedNodeType] = useState<"PRODUCT" | "TEMPLATE" | null>(null)
     const [sheetMode, setSheetMode] = useState<"create" | "view" | "edit">("create")
+    const [publishType, setPublishType] = useState<"PRODUCT" | "TEMPLATE" | null>(null)
+    const [isPublishSheetOpen, setIsPublishSheetOpen] = useState(false)
 
     const handleAddProduct = () => {
         setSelectedNodeId(null)
@@ -113,6 +116,8 @@ export default function SubmenuDetailPage() {
                     submenuId={submenuId}
                     onAddProduct={handleAddProduct}
                     onAddTemplate={handleAddTemplate}
+                    onPublishProduct={() => { setPublishType("PRODUCT"); setIsPublishSheetOpen(true) }}
+                    onPublishTemplate={() => { setPublishType("TEMPLATE"); setIsPublishSheetOpen(true) }}
                     onViewNode={handleViewNode}
                     onEditNode={handleEditNode}
                 />
@@ -134,6 +139,13 @@ export default function SubmenuDetailPage() {
                 nodeId={selectedNodeType === "TEMPLATE" ? selectedNodeId : null}
                 open={isTemplateSheetOpen}
                 onOpenChange={setIsTemplateSheetOpen}
+            />
+            <PublishCatalogNodeSheet
+                menuId={menuId}
+                submenuId={submenuId}
+                nodeType={publishType}
+                open={isPublishSheetOpen}
+                onOpenChange={setIsPublishSheetOpen}
             />
         </div>
     )

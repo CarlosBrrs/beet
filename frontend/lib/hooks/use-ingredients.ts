@@ -170,38 +170,6 @@ export function useCreateIngredient() {
 
 // ── Stock Adjustment (mock) ──
 
-export interface StockAdjustmentRequest {
-    mode: "DELTA" | "ABSOLUTE"
-    quantity: number
-    reason: string
-}
-
-async function adjustStock(ingredientId: string, adjustment: StockAdjustmentRequest) {
-    // 🚧 STILL MOCKED until backend implements it 🚧
-    await new Promise(resolve => setTimeout(resolve, 500))
-    const item = MOCK_INGREDIENTS.find(i => i.id === ingredientId)
-    if (!item) throw new Error("Ingredient not found")
-
-    if (adjustment.mode === "DELTA") {
-        item.currentStock += adjustment.quantity
-    } else {
-        item.currentStock = adjustment.quantity
-    }
-    return item
-}
-
-export function useAdjustStock() {
-    const queryClient = useQueryClient()
-
-    return useMutation({
-        mutationFn: ({ ingredientId, adjustment }: { ingredientId: string; adjustment: StockAdjustmentRequest }) =>
-            adjustStock(ingredientId, adjustment),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists() })
-        },
-    })
-}
-
 // ── Delete (mock) ──
 
 async function deleteIngredient(ingredientId: string) {

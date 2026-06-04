@@ -17,8 +17,6 @@ public interface CashSessionPersistencePort {
     CashSessionDomain close(UUID sessionId, UUID closedBy, UUID closedDeviceId,
             BigDecimal closingAmount, String notes);
 
-    CashSessionDomain rebind(UUID sessionId, UUID newDeviceId);
-
     Optional<CashSessionDomain> findSessionById(UUID id);
 
     Optional<CashSessionDomain> findOpenByRegisterId(UUID cashRegisterId);

@@ -6,6 +6,8 @@ import {
     CreatePreparationRequest,
     CreateProductRequest,
     UpdateItemRequest,
+    PageResponse,
+    ProductDependenciesResponse,
 } from "@/lib/api-types";
 import { useRestaurantContext } from "@/components/providers/restaurant-provider";
 import { toast } from "sonner";
@@ -20,6 +22,12 @@ export const itemKeys = {
         [...itemKeys.all, "preparations", restaurantId] as const,
     preparation: (restaurantId: string | null, id: string) =>
         [...itemKeys.all, "preparation", restaurantId, id] as const,
+    product: (restaurantId: string | null, id: string) =>
+        [...itemKeys.all, "product", restaurantId, id] as const,
+    templateOptions: (restaurantId: string | null) =>
+        [...itemKeys.all, "template-options", restaurantId] as const,
+    dependencies: (restaurantId: string | null, id: string) =>
+        [...itemKeys.all, "dependencies", restaurantId, id] as const,
 };
 
 // ── Fetch Functions ──
@@ -35,7 +43,7 @@ async function fetchPreparations(restaurantId: string): Promise<ItemResponse[]> 
 async function fetchItems(
     restaurantId: string,
     params?: { itemClass?: string; page?: number; size?: number; search?: string }
-): Promise<{ content: ItemResponse[]; totalElements: number; totalPages: number }> {
+): Promise<PageResponse<ItemResponse>> {
     const searchParams = new URLSearchParams();
     if (params?.itemClass) searchParams.set("itemClass", params.itemClass);
     if (params?.page !== undefined) searchParams.set("page", params.page.toString());
@@ -43,14 +51,71 @@ async function fetchItems(
     if (params?.search) searchParams.set("search", params.search);
 
     const queryString = searchParams.toString();
-    const url = `/restaurants/${restaurantId}/items${queryString ? `?${queryString}` : ""}`;
-    const data = await apiClient<ApiGenericResponse<any>>(url, { method: "GET" });
+    const url = `/restaurants/${restaurantId}/products${queryString ? `?${queryString}` : ""}`;
+    const data = await apiClient<ApiGenericResponse<PageResponse<ItemResponse>>>(url, { method: "GET" });
+    return data.data;
+}
 
-    // Fallback if pagination is not implemented in `/items` on backend yet
-    if (Array.isArray(data.data)) {
-        return { content: data.data, totalElements: data.data.length, totalPages: 1 };
-    }
-    return data.data; // Assuming Page responses if paginated
+async function fetchProductDependencies(
+    restaurantId: string,
+    productId: string
+): Promise<ProductDependenciesResponse> {
+    const data = await apiClient<ApiGenericResponse<ProductDependenciesResponse>>(
+        `/restaurants/${restaurantId}/products/${productId}/dependencies`,
+        { method: "GET" }
+    );
+    return data.data;
+}
+
+async function fetchProduct(restaurantId: string, productId: string): Promise<ItemResponse> {
+    const data = await apiClient<ApiGenericResponse<ItemResponse>>(
+        `/restaurants/${restaurantId}/products/${productId}`,
+        { method: "GET" }
+    );
+    return data.data;
+}
+
+async function fetchTemplateOptions(restaurantId: string): Promise<ItemResponse[]> {
+    const data = await apiClient<ApiGenericResponse<ItemResponse[]>>(
+        `/restaurants/${restaurantId}/products/template-options`,
+        { method: "GET" }
+    );
+    return data.data;
+}
+
+async function createCatalogProductRequest(
+    restaurantId: string,
+    request: CreateProductRequest
+): Promise<ItemResponse> {
+    const data = await apiClient<ApiGenericResponse<ItemResponse>>(
+        `/restaurants/${restaurantId}/products`,
+        { method: "POST", body: JSON.stringify(request) }
+    );
+    return data.data;
+}
+
+async function updateProductRequest(
+    restaurantId: string,
+    productId: string,
+    request: UpdateItemRequest
+): Promise<ItemResponse> {
+    const data = await apiClient<ApiGenericResponse<ItemResponse>>(
+        `/restaurants/${restaurantId}/products/${productId}`,
+        { method: "PUT", body: JSON.stringify(request) }
+    );
+    return data.data;
+}
+
+async function setProductActivationRequest(
+    restaurantId: string,
+    productId: string,
+    isActive: boolean
+): Promise<ItemResponse> {
+    const data = await apiClient<ApiGenericResponse<ItemResponse>>(
+        `/restaurants/${restaurantId}/products/${productId}/activation`,
+        { method: "PATCH", body: JSON.stringify({ isActive }) }
+    );
+    return data.data;
 }
 
 async function createPreparationRequest(
@@ -118,7 +183,75 @@ export function useItems(params?: { itemClass?: string; page?: number; size?: nu
 }
 
 export function useProducts(params?: { page?: number; size?: number; search?: string }) {
-    return useItems({ ...params, itemClass: "SALEABLE_PRODUCT" });
+    return useItems({ ...params, itemClass: "PRODUCT" });
+}
+
+export function useProductById(productId?: string | null) {
+    const { restaurantId } = useRestaurantContext();
+    return useQuery({
+        queryKey: itemKeys.product(restaurantId, productId ?? ""),
+        queryFn: () => fetchProduct(restaurantId!, productId!),
+        enabled: !!restaurantId && !!productId,
+    });
+}
+
+export function useProductDependencies(productId?: string | null) {
+    const { restaurantId } = useRestaurantContext();
+    return useQuery({
+        queryKey: itemKeys.dependencies(restaurantId, productId ?? ""),
+        queryFn: () => fetchProductDependencies(restaurantId!, productId!),
+        enabled: !!restaurantId && !!productId,
+    });
+}
+
+export function useTemplateOptionProducts() {
+    const { restaurantId } = useRestaurantContext();
+    return useQuery({
+        queryKey: itemKeys.templateOptions(restaurantId),
+        queryFn: () => fetchTemplateOptions(restaurantId!),
+        enabled: !!restaurantId,
+    });
+}
+
+export function useCreateCatalogProduct() {
+    const queryClient = useQueryClient();
+    const { restaurantId } = useRestaurantContext();
+    return useMutation({
+        mutationFn: (data: CreateProductRequest) => createCatalogProductRequest(restaurantId!, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: itemKeys.all });
+            toast.success("Producto creado exitosamente");
+        },
+        onError: (error: Error) => toast.error(error.message || "Error al crear el producto"),
+    });
+}
+
+export function useUpdateProduct() {
+    const queryClient = useQueryClient();
+    const { restaurantId } = useRestaurantContext();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: UpdateItemRequest }) =>
+            updateProductRequest(restaurantId!, id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: itemKeys.all });
+            toast.success("Producto actualizado exitosamente");
+        },
+        onError: (error: Error) => toast.error(error.message || "Error al actualizar el producto"),
+    });
+}
+
+export function useSetProductActive() {
+    const queryClient = useQueryClient();
+    const { restaurantId } = useRestaurantContext();
+    return useMutation({
+        mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+            setProductActivationRequest(restaurantId!, id, isActive),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: itemKeys.all });
+            toast.success("Estado del producto actualizado");
+        },
+        onError: (error: Error) => toast.error(error.message || "No fue posible actualizar el producto"),
+    });
 }
 
 export function useCreatePreparation() {
@@ -129,10 +262,10 @@ export function useCreatePreparation() {
         mutationFn: (data: CreatePreparationRequest) =>
             createPreparationRequest(restaurantId!, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: itemKeys.preparations(restaurantId) });
+            queryClient.invalidateQueries({ queryKey: itemKeys.all });
             toast.success("Preparación creada exitosamente");
         },
-        onError: (error: any) => {
+        onError: (error: Error) => {
             toast.error(error.message || "Error al crear la preparación");
         },
     });
@@ -156,7 +289,7 @@ export function useCreateProduct() {
             queryClient.invalidateQueries({ queryKey: itemKeys.preparations(restaurantId) });
             toast.success("Producto creado exitosamente");
         },
-        onError: (error: any) => {
+        onError: (error: Error) => {
             toast.error(error.message || "Error al crear el producto");
         },
     });
@@ -173,7 +306,7 @@ export function useUpdateItem() {
             queryClient.invalidateQueries({ queryKey: itemKeys.preparations(restaurantId) });
             toast.success("Item actualizado exitosamente");
         },
-        onError: (error: any) => {
+        onError: (error: Error) => {
             toast.error(error.message || "Error al actualizar el item");
         },
     });
@@ -189,7 +322,7 @@ export function useDeleteItem() {
             queryClient.invalidateQueries({ queryKey: itemKeys.preparations(restaurantId) });
             toast.success("Item eliminado exitosamente");
         },
-        onError: (error: any) => {
+        onError: (error: Error) => {
             toast.error(error.message || "Error al eliminar el item");
         },
     });

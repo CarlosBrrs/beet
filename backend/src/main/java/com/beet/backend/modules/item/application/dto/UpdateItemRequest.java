@@ -13,5 +13,6 @@ public record UpdateItemRequest(
         UUID yieldUnitId,
         // For flat products only — user-defined cost
         BigDecimal userDefinedCost,
+        Boolean isAvailableAsTemplateOption,
         @Valid List<RecipeLineRequest> lines) {
 }

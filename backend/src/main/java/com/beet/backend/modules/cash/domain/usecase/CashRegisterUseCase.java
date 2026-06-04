@@ -29,10 +29,7 @@ public class CashRegisterUseCase implements CashRegisterServicePort {
         if (persistencePort.existsByName(register.getRestaurantId(), register.getName())) {
             throw CashRegisterAlreadyExistsException.forName(register.getName());
         }
-        if (register.getDeviceId() != null
-                && persistencePort.existsByDevice(register.getRestaurantId(), register.getDeviceId())) {
-            throw CashRegisterAlreadyExistsException.forDevice(register.getDeviceId().toString());
-        }
+        register.setDeviceId(null);
         if (register.getIsActive() == null) {
             register.setIsActive(true);
         }
@@ -42,7 +39,7 @@ public class CashRegisterUseCase implements CashRegisterServicePort {
     @Override
     @Transactional
     public CashRegisterDomain update(CashRegisterDomain register) {
-        CashRegisterDomain existing = persistencePort.findRegisterById(register.getId())
+        CashRegisterDomain existing = persistencePort.findRegisterByIdForUpdate(register.getId())
                 .orElseThrow(() -> CashRegisterNotFoundException.forId(register.getId()));
 
         if (!existing.getRestaurantId().equals(register.getRestaurantId())) {
@@ -55,16 +52,7 @@ public class CashRegisterUseCase implements CashRegisterServicePort {
             throw CashRegisterAlreadyExistsException.forName(updatedName);
         }
 
-        if (register.getDeviceId() != null
-                && (existing.getDeviceId() == null || !existing.getDeviceId().equals(register.getDeviceId()))
-                && persistencePort.existsByDevice(register.getRestaurantId(), register.getDeviceId())) {
-            throw CashRegisterAlreadyExistsException.forDevice(register.getDeviceId().toString());
-        }
-
         existing.setName(updatedName);
-        if (register.getDeviceId() != null) {
-            existing.setDeviceId(register.getDeviceId());
-        }
         if (register.getIsActive() != null) {
             if (!register.getIsActive() && Boolean.TRUE.equals(existing.getIsActive())) {
                 ensureNoOpenSession(existing.getId());
@@ -82,13 +70,26 @@ public class CashRegisterUseCase implements CashRegisterServicePort {
     @Override
     @Transactional
     public CashRegisterDomain deactivate(UUID restaurantId, UUID registerId, UUID updatedBy) {
-        CashRegisterDomain existing = persistencePort.findRegisterById(registerId)
+        CashRegisterDomain existing = persistencePort.findRegisterByIdForUpdate(registerId)
                 .orElseThrow(() -> CashRegisterNotFoundException.forId(registerId));
         if (!existing.getRestaurantId().equals(restaurantId)) {
             throw new AccessDeniedException("Cash register does not belong to restaurant");
         }
         ensureNoOpenSession(registerId);
         existing.setIsActive(false);
+        existing.setUpdatedBy(updatedBy);
+        return persistencePort.update(existing);
+    }
+
+    @Override
+    @Transactional
+    public CashRegisterDomain releaseDeviceBinding(UUID restaurantId, UUID registerId, UUID updatedBy) {
+        CashRegisterDomain existing = loadRegister(restaurantId, registerId);
+        ensureNoOpenSession(registerId);
+        if (existing.getDeviceId() == null) {
+            return existing;
+        }
+        existing.setDeviceId(null);
         existing.setUpdatedBy(updatedBy);
         return persistencePort.update(existing);
     }
@@ -108,5 +109,14 @@ public class CashRegisterUseCase implements CashRegisterServicePort {
         if (sessionPersistencePort.findOpenByRegisterId(registerId).isPresent()) {
             throw CashSessionConflictException.openRegister();
         }
+    }
+
+    private CashRegisterDomain loadRegister(UUID restaurantId, UUID registerId) {
+        CashRegisterDomain existing = persistencePort.findRegisterByIdForUpdate(registerId)
+                .orElseThrow(() -> CashRegisterNotFoundException.forId(registerId));
+        if (!existing.getRestaurantId().equals(restaurantId)) {
+            throw new AccessDeniedException("Cash register does not belong to restaurant");
+        }
+        return existing;
     }
 }

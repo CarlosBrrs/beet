@@ -1,24 +1,21 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { IngredientListResponse, MockIngredient } from "@/lib/api-types"
+import { IngredientListResponse } from "@/lib/api-types"
 import { DataTable } from "@/components/shared/data-table/data-table"
 import { Button } from "@/components/ui/button"
-import { Can } from "@/components/shared/can"
-import { Pencil, Trash2, Eye, BarChart2 } from "lucide-react"
+import { Pencil, Trash2, Eye } from "lucide-react"
 import { useState } from "react"
 import { DataTableColumnHeader } from "@/components/shared/data-table/data-table-column-header"
 import { formatCurrency } from "@/lib/utils"
 import { useIngredients } from "@/lib/hooks/use-ingredients"
 import { useDebounce } from "@/lib/hooks/use-debounce"
 import { PaginationState, SortingState, ColumnFiltersState } from "@tanstack/react-table"
-import { PermissionAction } from "@/lib/permissions"
 
 // Columns Definition
 const createColumns = (
     onView: (ingredient: IngredientListResponse) => void,
     onEdit: (ingredient: IngredientListResponse) => void,
-    onAdjust: (ingredient: IngredientListResponse) => void,
     onDelete: (ingredient: IngredientListResponse) => void
 ): ColumnDef<IngredientListResponse>[] => [
         {
@@ -53,9 +50,6 @@ const createColumns = (
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(ingredient)}>
                                 <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" onClick={() => onAdjust(ingredient)}>
-                                <BarChart2 className="h-4 w-4" />
-                            </Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDelete(ingredient)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
@@ -68,11 +62,10 @@ const createColumns = (
 interface IngredientListProps {
     onView: (ingredient: IngredientListResponse) => void
     onEdit: (ingredient: IngredientListResponse) => void
-    onAdjust: (ingredient: IngredientListResponse) => void
     onDelete: (ingredient: IngredientListResponse) => void
 }
 
-export function IngredientList({ onView, onEdit, onAdjust, onDelete }: IngredientListProps) {
+export function IngredientList({ onView, onEdit, onDelete }: IngredientListProps) {
 
     // Controlled Server-Side States
     const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })
@@ -103,7 +96,7 @@ export function IngredientList({ onView, onEdit, onAdjust, onDelete }: Ingredien
     const ingredients = pageResult?.content || []
     const pageCount = pageResult?.totalPages || -1
 
-    const columns = createColumns(onView, onEdit, onAdjust, onDelete)
+    const columns = createColumns(onView, onEdit, onDelete)
 
     if (isLoading && ingredients.length === 0) return <div>Loading ingredients...</div>
 

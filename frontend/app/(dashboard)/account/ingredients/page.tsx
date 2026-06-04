@@ -9,8 +9,6 @@ import { IngredientForm } from "@/components/modules/ingredients/ingredient-form
 import { IngredientDetail } from "@/components/modules/ingredients/ingredient-detail"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
-import { DialogShell } from "@/components/shared/dialog-shell"
-import { StockAdjustmentForm } from "@/components/modules/ingredients/stock-adjustment-form"
 import { useDeleteIngredient } from "@/lib/hooks/use-ingredients"
 import { toast } from "sonner"
 
@@ -27,7 +25,6 @@ export default function IngredientsPage() {
     const { mutate: deleteIngredient } = useDeleteIngredient()
 
     const [selectedIngredient, setSelectedIngredient] = useState<IngredientListResponse | null>(null)
-    const [adjustmentIngredient, setAdjustmentIngredient] = useState<IngredientListResponse | null>(null)
     const [isSheetOpen, setIsSheetOpen] = useState(false)
     const [isReadOnly, setIsReadOnly] = useState(false)
 
@@ -62,11 +59,6 @@ export default function IngredientsPage() {
         setIsSheetOpen(true)
     }
 
-    // Handlers for Stock Adjustment Modal
-    const handleAdjust = (ingredient: IngredientListResponse) => {
-        setAdjustmentIngredient(ingredient)
-    }
-
     const handleDelete = (ingredient: IngredientListResponse) => {
         if (confirm(`Are you sure you want to delete ${ingredient.name}? This action cannot be undone.`)) {
             deleteIngredient(ingredient.id, {
@@ -92,7 +84,6 @@ export default function IngredientsPage() {
             <IngredientList
                 onView={handleView}
                 onEdit={handleEdit}
-                onAdjust={handleAdjust}
                 onDelete={handleDelete}
             />
 
@@ -120,20 +111,6 @@ export default function IngredientsPage() {
                     />
                 )}
             </SheetShell>
-
-            {/* Stock Adjustment Dialog */}
-            {adjustmentIngredient && (
-                <DialogShell
-                    open={!!adjustmentIngredient}
-                    onOpenChange={() => setAdjustmentIngredient(null)}
-                    title={`Adjust Stock: ${adjustmentIngredient.name}`}
-                >
-                    <StockAdjustmentForm
-                        ingredient={adjustmentIngredient}
-                        onSuccess={() => setAdjustmentIngredient(null)}
-                    />
-                </DialogShell>
-            )}
         </div>
     )
 }

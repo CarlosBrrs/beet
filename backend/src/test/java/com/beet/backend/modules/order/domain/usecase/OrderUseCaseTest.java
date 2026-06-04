@@ -6,7 +6,10 @@ import com.beet.backend.modules.order.domain.exception.OrderNotFoundException;
 import com.beet.backend.modules.order.domain.model.OrderDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemDomain;
 import com.beet.backend.modules.order.domain.spi.OrderPersistencePort;
+import com.beet.backend.modules.order.domain.spi.OrderTableGateway;
 import com.beet.backend.modules.order.domain.spi.OrderTaxQueryPort;
+import com.beet.backend.modules.order.domain.model.ServiceType;
+import com.beet.backend.modules.restaurant.domain.model.RestaurantDomain;
 import com.beet.backend.modules.restaurant.domain.spi.RestaurantPersistencePort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +44,9 @@ class OrderUseCaseTest {
     @Mock
     private SubmenuNodeQueryPort submenuNodeQuery;
 
+    @Mock
+    private OrderTableGateway tableGateway;
+
     @InjectMocks
     private OrderUseCase useCase;
 
@@ -62,5 +68,53 @@ class OrderUseCaseTest {
                 UUID.randomUUID()));
 
         verify(orderPersistence, never()).saveItem(any());
+    }
+
+    @Test
+    void shouldRequireTableForDineInOrder() {
+        UUID restaurantId = UUID.randomUUID();
+        OrderDomain order = OrderDomain.builder()
+                .restaurantId(restaurantId)
+                .serviceType(ServiceType.DINE_IN)
+                .build();
+
+        when(restaurantPersistence.findById(restaurantId))
+                .thenReturn(Optional.of(RestaurantDomain.builder().id(restaurantId).build()));
+
+        assertThrows(IllegalArgumentException.class, () -> useCase.createOrder(order, UUID.randomUUID()));
+        verify(tableGateway, never()).validateAvailableForOrder(any(), any());
+    }
+
+    @Test
+    void shouldRejectTableForTakeoutOrder() {
+        UUID restaurantId = UUID.randomUUID();
+        OrderDomain order = OrderDomain.builder()
+                .restaurantId(restaurantId)
+                .serviceType(ServiceType.TAKEOUT)
+                .tableId(UUID.randomUUID())
+                .build();
+
+        when(restaurantPersistence.findById(restaurantId))
+                .thenReturn(Optional.of(RestaurantDomain.builder().id(restaurantId).build()));
+
+        assertThrows(IllegalArgumentException.class, () -> useCase.createOrder(order, UUID.randomUUID()));
+        verify(tableGateway, never()).validateAvailableForOrder(any(), any());
+    }
+
+    @Test
+    void shouldValidateAvailableTableForDineInOrder() {
+        UUID restaurantId = UUID.randomUUID();
+        UUID tableId = UUID.randomUUID();
+        OrderDomain order = OrderDomain.builder()
+                .restaurantId(restaurantId)
+                .serviceType(ServiceType.DINE_IN)
+                .tableId(tableId)
+                .build();
+
+        when(restaurantPersistence.findById(restaurantId))
+                .thenReturn(Optional.of(RestaurantDomain.builder().id(restaurantId).build()));
+
+        assertThrows(IllegalArgumentException.class, () -> useCase.createOrder(order, UUID.randomUUID()));
+        verify(tableGateway).validateAvailableForOrder(restaurantId, tableId);
     }
 }

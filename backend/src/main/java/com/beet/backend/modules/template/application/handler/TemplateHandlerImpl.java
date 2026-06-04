@@ -6,8 +6,10 @@ import com.beet.backend.modules.template.domain.model.SlotOptionDomain;
 import com.beet.backend.modules.template.domain.model.TemplateDomain;
 import com.beet.backend.modules.template.domain.model.TemplateSlotDomain;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
+import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.beet.backend.shared.infrastructure.security.SecurityUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -28,9 +30,39 @@ public class TemplateHandlerImpl implements TemplateHandler {
                 return ApiGenericResponse.success(toResponse(created));
         }
 
+        @Override public ApiGenericResponse<TemplateResponse> createTemplate(UUID restaurantId, CreateTemplateRequest request) {
+                return ApiGenericResponse.success(toResponse(templateServicePort.createTemplate(toDomain(restaurantId, request))));
+        }
+        @Override public ApiGenericResponse<PageResponse<TemplateResponse>> findAll(
+                        UUID restaurantId, int page, int size, String search) {
+                PageResponse<TemplateDomain> result = templateServicePort.findAllPaged(restaurantId, page, size, search);
+                return ApiGenericResponse.success(PageResponse.of(
+                                result.content().stream().map(this::toResponse).toList(),
+                                result.totalElements(),
+                                result.number(),
+                                result.size()));
+        }
+        @Override public ApiGenericResponse<TemplateResponse> setActive(UUID restaurantId, UUID templateId, boolean active) {
+                return ApiGenericResponse.success(toResponse(templateServicePort.setActive(restaurantId, templateId, active, SecurityUtils.getAuthenticatedUserId())));
+        }
+
+        @Override
+        public ApiGenericResponse<TemplateResponse> updateTemplate(
+                        UUID restaurantId, UUID templateId, CreateTemplateRequest request) {
+                TemplateDomain domain = toDomain(restaurantId, request);
+                domain.setId(templateId);
+                return ApiGenericResponse.success(toResponse(templateServicePort.updateTemplate(
+                                restaurantId, domain, SecurityUtils.getAuthenticatedUserId())));
+        }
+
         @Override
         public ApiGenericResponse<TemplateResponse> getById(UUID templateId) {
                 return ApiGenericResponse.success(toResponse(templateServicePort.getById(templateId)));
+        }
+
+        @Override
+        public ApiGenericResponse<TemplateResponse> getById(UUID restaurantId, UUID templateId) {
+                return ApiGenericResponse.success(toResponse(templateServicePort.getById(restaurantId, templateId)));
         }
 
         @Override
@@ -52,6 +84,7 @@ public class TemplateHandlerImpl implements TemplateHandler {
                                                 .surcharge(optReq.surcharge() != null ? optReq.surcharge()
                                                                 : BigDecimal.ZERO)
                                                 .isDefault(optReq.isDefault())
+                                                .maxQuantity(optReq.maxQuantity())
                                                 .sortOrder(optReq.sortOrder())
                                                 .build()).collect(Collectors.toList()))
                                 .build()).collect(Collectors.toList());
@@ -61,6 +94,9 @@ public class TemplateHandlerImpl implements TemplateHandler {
                                 .name(request.name())
                                 .description(request.description())
                                 .basePrice(request.basePrice())
+                                .isActive(true)
+                                .createdBy(SecurityUtils.getAuthenticatedUserId())
+                                .updatedBy(SecurityUtils.getAuthenticatedUserId())
                                 .slots(slots)
                                 .build();
         }
@@ -72,6 +108,8 @@ public class TemplateHandlerImpl implements TemplateHandler {
                                 d.getName(),
                                 d.getDescription(),
                                 d.getBasePrice(),
+                                d.isActive(),
+                                d.isPublished(),
                                 d.getSlots().stream().map(slot -> new TemplateResponse.SlotResponse(
                                                 slot.getId(),
                                                 slot.getName(),
@@ -84,6 +122,7 @@ public class TemplateHandlerImpl implements TemplateHandler {
                                                                                 opt.getItemId(),
                                                                                 opt.getSurcharge(),
                                                                                 opt.isDefault(),
+                                                                                opt.getMaxQuantity(),
                                                                                 opt.getSortOrder()))
                                                                 .collect(Collectors.toList())))
                                                 .collect(Collectors.toList()),

@@ -37,7 +37,6 @@ export default function MenusPage() {
                     </Button>
                 </Can>
             </div>
-
             <Can I="VIEW" a="MENUS">
                 <MenuList onEditMenu={handleEditMenu} />
             </Can>

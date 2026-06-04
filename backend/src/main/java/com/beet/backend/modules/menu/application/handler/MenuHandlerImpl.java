@@ -12,8 +12,11 @@ import com.beet.backend.modules.menu.domain.model.MenuDomain;
 import com.beet.backend.modules.menu.domain.model.SubmenuNodeDomain;
 import com.beet.backend.modules.menu.domain.model.SubmenuNodeType;
 import com.beet.backend.modules.menu.domain.model.SubmenuDomain;
+import com.beet.backend.modules.menu.domain.exception.MenuNotFoundException;
+import com.beet.backend.modules.menu.domain.exception.SubmenuNotFoundException;
 import com.beet.backend.modules.menu.domain.spi.MenuPersistencePort;
 import com.beet.backend.modules.menu.domain.spi.SubmenuNodeQueryPort;
+import com.beet.backend.modules.menu.domain.spi.SubmenuPersistencePort;
 import com.beet.backend.modules.template.application.dto.TemplateResponse;
 import com.beet.backend.modules.template.domain.exception.TemplateNotFoundException;
 import com.beet.backend.modules.template.domain.model.TemplateDomain;
@@ -32,6 +35,7 @@ public class MenuHandlerImpl implements MenuHandler {
 
         private final MenuServicePort menuServicePort;
         private final MenuPersistencePort menuPersistencePort;
+        private final SubmenuPersistencePort submenuPersistencePort;
         private final SubmenuNodeQueryPort submenuNodeQueryPort;
         private final ItemPersistencePort itemPersistencePort;
         private final TemplatePersistencePort templatePersistencePort;
@@ -90,11 +94,49 @@ public class MenuHandlerImpl implements MenuHandler {
         }
 
         @Override
-        public ApiGenericResponse<List<SubmenuNodeResponse>> getSubmenuNodes(UUID submenuId) {
+        public ApiGenericResponse<List<SubmenuNodeResponse>> getSubmenuNodes(
+                        UUID restaurantId, UUID menuId, UUID submenuId) {
+                assertSubmenuPath(restaurantId, menuId, submenuId);
                 return ApiGenericResponse.success(
-                                submenuNodeQueryPort.findNodesBySubmenu(submenuId).stream()
+                                submenuNodeQueryPort.findNodesBySubmenu(restaurantId, submenuId).stream()
                                                 .map(this::mapToSubmenuNodeResponse)
                                                 .collect(Collectors.toList()));
+        }
+
+        @Override
+        public ApiGenericResponse<SubmenuNodeResponse> publishSubmenuNode(
+                        UUID restaurantId, UUID menuId, UUID submenuId, PublishSubmenuNodeRequest request) {
+                assertSubmenuPath(restaurantId, menuId, submenuId);
+                SubmenuNodeDomain node = submenuNodeQueryPort.saveNode(
+                                restaurantId,
+                                submenuId,
+                                request.nodeType(),
+                                request.referenceId(),
+                                request.sortOrder() != null ? request.sortOrder() : 0);
+                return ApiGenericResponse.success(mapToSubmenuNodeResponse(node));
+        }
+
+        @Override
+        public ApiGenericResponse<Void> deleteSubmenuNode(
+                        UUID restaurantId, UUID menuId, UUID submenuId, UUID nodeId) {
+                assertSubmenuPath(restaurantId, menuId, submenuId);
+                submenuNodeQueryPort.deleteNode(restaurantId, submenuId, nodeId);
+                return ApiGenericResponse.success(null);
+        }
+
+        @Override
+        public void assertMenuPath(UUID restaurantId, UUID menuId) {
+                menuPersistencePort.findMenuById(menuId)
+                                .filter(menu -> restaurantId.equals(menu.getRestaurantId()))
+                                .orElseThrow(() -> MenuNotFoundException.forId(menuId));
+        }
+
+        @Override
+        public void assertSubmenuPath(UUID restaurantId, UUID menuId, UUID submenuId) {
+                assertMenuPath(restaurantId, menuId);
+                submenuPersistencePort.findSubmenuById(submenuId)
+                                .filter(submenu -> menuId.equals(submenu.getMenuId()))
+                                .orElseThrow(() -> SubmenuNotFoundException.forId(submenuId));
         }
 
         // ----- Mappers -----------------------------------------------------------
@@ -132,12 +174,16 @@ public class MenuHandlerImpl implements MenuHandler {
                         ItemDomain itemDomain = itemPersistencePort.findById(node.itemId())
                                         .orElseThrow(() -> ItemNotFoundException.forId(node.itemId()));
                         itemDomain.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(itemDomain.getId()));
+                        itemDomain.setPublished(true);
+                        itemDomain.setUsedAsTemplateOption(itemPersistencePort.isUsedAsTemplateOption(
+                                        itemDomain.getRestaurantId(), itemDomain.getId()));
                         item = mapToItemResponse(itemDomain);
                 }
 
                 if (node.nodeType() == SubmenuNodeType.TEMPLATE) {
                         TemplateDomain templateDomain = templatePersistencePort.findById(node.templateId())
                                         .orElseThrow(() -> TemplateNotFoundException.forId(node.templateId()));
+                        templateDomain.setPublished(true);
                         template = mapToTemplateResponse(templateDomain);
                 }
 
@@ -164,6 +210,10 @@ public class MenuHandlerImpl implements MenuHandler {
                                 item.getYieldUnitId(),
                                 item.getSalePrice(),
                                 item.getTheoreticalCost(),
+                                item.isActive(),
+                                item.isAvailableAsTemplateOption(),
+                                item.isPublished(),
+                                item.isUsedAsTemplateOption(),
                                 item.getRecipeLines().stream()
                                                 .map(this::mapLineToResponse)
                                                 .collect(Collectors.toList()),
@@ -178,6 +228,8 @@ public class MenuHandlerImpl implements MenuHandler {
                                 template.getName(),
                                 template.getDescription(),
                                 template.getBasePrice(),
+                                template.isActive(),
+                                template.isPublished(),
                                 template.getSlots().stream()
                                                 .map(slot -> new TemplateResponse.SlotResponse(
                                                                 slot.getId(),
@@ -191,6 +243,7 @@ public class MenuHandlerImpl implements MenuHandler {
                                                                                                 option.getItemId(),
                                                                                                 option.getSurcharge(),
                                                                                                 option.isDefault(),
+                                                                                                option.getMaxQuantity(),
                                                                                                 option.getSortOrder()))
                                                                                 .collect(Collectors.toList())))
                                                 .collect(Collectors.toList()),

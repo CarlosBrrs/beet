@@ -3,7 +3,6 @@
 import * as React from "react"
 import {
     AlertDialog,
-    AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
@@ -16,7 +15,7 @@ import { Loader2 } from "lucide-react"
 
 interface ConfirmDialogProps {
     title: string
-    description: string
+    description: React.ReactNode
     open: boolean
     onOpenChange: (open: boolean) => void
     onConfirm: () => Promise<void> | void
@@ -64,15 +63,6 @@ export function ConfirmDialog({
                     <AlertDialogCancel disabled={isLoading}>
                         {cancelText}
                     </AlertDialogCancel>
-                    {/* 
-                        We wrap Action in a custom button logic because AlertDialogAction 
-                        automatically closes the dialog on click, which we might want to prevent 
-                        until the async action finishes.
-                        However, typically AlertDialogAction is just a primitive. 
-                        To control it manually, we might need a custom footer button or preventDefault.
-                        Shadcn's AlertDialogAction does not expose loading easily.
-                        We can use a Button with onClick derived from logic.
-                    */}
                     <Button
                         variant={variant === "destructive" ? "destructive" : "default"}
                         onClick={handleConfirm}

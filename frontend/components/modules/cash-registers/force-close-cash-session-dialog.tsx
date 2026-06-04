@@ -67,7 +67,9 @@ export function ForceCloseCashSessionDialog({
             open={open}
             onOpenChange={handleOpenChange}
             title="Force close cash session"
-            description={session ? `${session.restaurantName} - ${session.cashRegisterName}` : undefined}
+            description={session
+                ? `${session.restaurantName} - ${session.cashRegisterName}. Emergency action for managers or owners. The assigned device will be released.`
+                : undefined}
         >
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

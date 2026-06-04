@@ -158,13 +158,11 @@ export interface CashRegisterResponse {
 
 export interface CreateCashRegisterRequest {
     name: string;
-    deviceId?: string;
     notes?: string;
 }
 
 export interface UpdateCashRegisterRequest {
     name?: string;
-    deviceId?: string;
     isActive?: boolean;
     notes?: string;
 }
@@ -204,6 +202,40 @@ export interface CashSessionListResponse extends CashSessionResponse {
 }
 
 // ── Mock Ingredient types (used by list, detail, delete, adjust — still mocked) ──
+
+export type TableAvailabilityStatus = "AVAILABLE" | "OCCUPIED" | "INACTIVE";
+
+export interface RestaurantTableResponse {
+    id: string;
+    restaurantId: string;
+    name: string;
+    capacity: number;
+    area: string | null;
+    sortOrder: number;
+    isActive: boolean;
+    notes: string | null;
+    availabilityStatus: TableAvailabilityStatus;
+    openOrderId: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateRestaurantTableRequest {
+    name: string;
+    capacity: number;
+    area?: string;
+    sortOrder?: number;
+    notes?: string;
+}
+
+export interface UpdateRestaurantTableRequest {
+    name?: string;
+    capacity?: number;
+    area?: string;
+    sortOrder?: number;
+    isActive?: boolean;
+    notes?: string;
+}
 
 export interface MockIngredient {
     id: string;
@@ -479,7 +511,7 @@ export interface UpdateSubmenuRequest {
 
 // ── Items — Preparations (Layer 1) & Products (Layer 2) ──
 
-export type ItemClass = "PREPARATION" | "SALEABLE_PRODUCT";
+export type ItemClass = "PREPARATION" | "PRODUCT";
 export type RecipeLineSource = "INGREDIENT" | "PREPARATION";
 
 export interface RecipeLineResponse {
@@ -503,6 +535,10 @@ export interface ItemResponse {
     yieldUnitId: string | null;
     salePrice: number | null;
     theoreticalCost: number | null;
+    isActive: boolean;
+    isAvailableAsTemplateOption: boolean;
+    isPublished: boolean;
+    isUsedAsTemplateOption: boolean;
     recipeLines: RecipeLineResponse[];
     createdAt: string;
     updatedAt: string;
@@ -531,8 +567,9 @@ export interface CreatePreparationRequest {
 export interface CreateProductRequest {
     name: string;
     description?: string;
-    salePrice: number;
+    salePrice?: number;
     isInventoryTracked: boolean;
+    isAvailableAsTemplateOption?: boolean;
     userDefinedCost?: number;              // Only for flat products
     lines?: RecipeLineRequest[];           // Only for products with recipe
     yieldQty?: number;
@@ -546,6 +583,7 @@ export interface UpdateItemRequest {
     yieldQty?: number;
     yieldUnitId?: string;
     userDefinedCost?: number;
+    isAvailableAsTemplateOption?: boolean;
     lines?: RecipeLineRequest[];
 }
 
@@ -555,6 +593,7 @@ export interface SlotOptionRequest {
     itemId: string;
     surcharge?: number;
     isDefault?: boolean;
+    maxQuantity: number;
     sortOrder?: number;
 }
 
@@ -578,6 +617,7 @@ export interface SlotOptionResponse {
     itemId: string;
     surcharge: number;
     isDefault: boolean;
+    maxQuantity: number;
     sortOrder: number;
 }
 
@@ -596,12 +636,35 @@ export interface TemplateResponse {
     name: string;
     description: string | null;
     basePrice: number;
+    isActive: boolean;
+    isPublished: boolean;
     slots: SlotResponse[];
     createdAt: string;
     updatedAt: string;
 }
 
 export type SubmenuNodeType = "PRODUCT" | "TEMPLATE";
+
+export interface PublishSubmenuNodeRequest {
+    nodeType: SubmenuNodeType;
+    referenceId: string;
+    sortOrder?: number;
+}
+
+export interface ProductDependenciesResponse {
+    publications: {
+        menuId: string;
+        menuName: string;
+        submenuId: string;
+        submenuName: string;
+    }[];
+    templateUsages: {
+        templateId: string;
+        templateName: string;
+        slotId: string;
+        slotName: string;
+    }[];
+}
 
 export interface SubmenuNodeResponse {
     id: string;

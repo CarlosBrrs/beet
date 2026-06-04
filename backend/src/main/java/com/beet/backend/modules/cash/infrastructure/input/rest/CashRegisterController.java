@@ -62,4 +62,12 @@ public class CashRegisterController {
             @PathVariable UUID registerId) {
         return ResponseEntity.ok(handler.deactivateRegister(restaurantId, registerId));
     }
+
+    @DeleteMapping("/{registerId}/device-binding")
+    @RequiresPermission(module = PermissionModule.CASH, action = PermissionAction.MANAGE)
+    public ResponseEntity<ApiGenericResponse<CashRegisterResponse>> releaseDeviceBinding(
+            @PathVariable UUID restaurantId,
+            @PathVariable UUID registerId) {
+        return ResponseEntity.ok(handler.releaseRegisterDeviceBinding(restaurantId, registerId));
+    }
 }

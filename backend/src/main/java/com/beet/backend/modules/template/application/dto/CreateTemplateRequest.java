@@ -14,5 +14,5 @@ public record CreateTemplateRequest(
 
         @NotNull(message = "Base price is required") @PositiveOrZero(message = "Base price must be >= 0") @Digits(integer = 12, fraction = 2) BigDecimal basePrice,
 
-        @NotNull(message = "Slots are required") @Valid List<CreateSlotRequest> slots) {
+        @NotNull(message = "Slots are required") @Size(min = 1, message = "At least one slot is required") @Valid List<CreateSlotRequest> slots) {
 }

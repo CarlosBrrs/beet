@@ -17,5 +17,14 @@ public interface MenuHandler {
 
     ApiGenericResponse<SubmenuResponse> updateSubmenu(UUID submenuId, UpdateSubmenuRequest request);
 
-    ApiGenericResponse<List<SubmenuNodeResponse>> getSubmenuNodes(UUID submenuId);
+    ApiGenericResponse<List<SubmenuNodeResponse>> getSubmenuNodes(UUID restaurantId, UUID menuId, UUID submenuId);
+
+    ApiGenericResponse<SubmenuNodeResponse> publishSubmenuNode(
+            UUID restaurantId, UUID menuId, UUID submenuId, PublishSubmenuNodeRequest request);
+
+    ApiGenericResponse<Void> deleteSubmenuNode(UUID restaurantId, UUID menuId, UUID submenuId, UUID nodeId);
+
+    void assertMenuPath(UUID restaurantId, UUID menuId);
+
+    void assertSubmenuPath(UUID restaurantId, UUID menuId, UUID submenuId);
 }

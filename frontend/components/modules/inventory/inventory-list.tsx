@@ -5,7 +5,7 @@ import { InventoryStockResponse } from "@/lib/api-types"
 import { DataTable } from "@/components/shared/data-table/data-table"
 import { Button } from "@/components/ui/button"
 import { Can } from "@/components/shared/can"
-import { Pencil, Clock, AlertTriangle, CheckCircle } from "lucide-react"
+import { ArrowUpDown, Clock, AlertTriangle, CheckCircle } from "lucide-react"
 import { useState } from "react"
 import { DataTableColumnHeader } from "@/components/shared/data-table/data-table-column-header"
 import { useInventoryStocks } from "@/lib/hooks/use-inventory"
@@ -72,7 +72,7 @@ const createColumns = (
                                 onClick={() => onAdjust(stock)}
                                 title="Adjust Stock"
                             >
-                                <Pencil className="h-4 w-4" />
+                                <ArrowUpDown className="h-4 w-4" />
                             </Button>
                         </Can>
                         <Button variant="ghost" size="icon" className="h-8 w-8"
