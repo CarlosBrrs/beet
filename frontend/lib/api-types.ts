@@ -122,6 +122,7 @@ export interface RestaurantSettings {
     maxTableCapacity: number;
     taxApplyMode: 'PER_INVOICE' | 'PER_ITEM';
     defaultTaxPercentage: number;
+    timeZone?: string;
 }
 
 export interface RestaurantRequest {
@@ -675,5 +676,280 @@ export interface SubmenuNodeResponse {
     sortOrder: number;
     item: ItemResponse | null;
     template: TemplateResponse | null;
+}
+
+// Orders / POS
+
+export type OrderStatus = "DRAFT" | "AWAITING_PAYMENT" | "OPEN" | "COMPLETED" | "CANCELED";
+export type KitchenStatus = "NOT_SENT" | "PENDING" | "PREPARING" | "PARTIALLY_READY" | "READY" | "ACCEPTED" | "SERVED";
+export type KitchenTicketStatus = "PENDING" | "PREPARING" | "READY" | "CANCELED";
+export type PaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID" | "REFUNDED";
+export type ServiceType = "DINE_IN" | "TAKEOUT" | "DELIVERY";
+export type DeliveryStatus = "NOT_APPLICABLE" | "PENDING_DISPATCH" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELED";
+export type OrderLineType = "PRODUCT" | "TEMPLATE";
+export type CatalogReferenceType = "PRODUCT" | "TEMPLATE";
+export type PaymentMethodType = "CASH" | "DEBIT_CARD" | "CREDIT_CARD" | "NEQUI" | "DAVIPLATA" | "INTERNAL_CREDIT" | "OTHER";
+export type PaymentRecordStatus = "RECORDED" | "VOIDED" | "REFUNDED";
+export type BillPaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
+export type BillSplitMode = "ITEM_QUANTITY" | "AMOUNT" | "PERCENTAGE" | "EVENLY";
+
+export interface PosTemplateOptionResponse {
+    slotOptionId: string;
+    itemId: string;
+    itemName: string;
+    surcharge: number;
+    maxQuantity: number;
+    isDefault: boolean;
+    available: boolean;
+    lowStock: boolean;
+    unavailableReason: string | null;
+    sortOrder: number;
+    insufficientIngredients: string[];
+}
+
+export interface PosTemplateSlotResponse {
+    slotId: string;
+    name: string;
+    minSelection: number;
+    maxSelection: number;
+    sortOrder: number;
+    options: PosTemplateOptionResponse[];
+}
+
+export interface PosCatalogResponse {
+    nodeId: string;
+    menuId: string;
+    menuName: string;
+    submenuId: string;
+    submenuName: string;
+    referenceType: CatalogReferenceType;
+    referenceId: string;
+    name: string;
+    description: string | null;
+    price: number;
+    available: boolean;
+    lowStock: boolean;
+    unavailableReason: string | null;
+    sortOrder: number;
+    insufficientIngredients: string[];
+    slots: PosTemplateSlotResponse[];
+}
+
+export interface TemplateOptionSelectionRequest {
+    slotOptionId: string;
+    itemId: string;
+    quantity: number;
+}
+
+export interface TemplateSlotSelectionRequest {
+    slotId: string;
+    options: TemplateOptionSelectionRequest[];
+}
+
+export interface OrderItemRequest {
+    lineType: OrderLineType;
+    itemId?: string;
+    templateId?: string;
+    submenuNodeId: string;
+    quantity: number;
+    notes?: string;
+    slots?: TemplateSlotSelectionRequest[];
+}
+
+export interface OrderCreateRequest {
+    serviceType: ServiceType;
+    tableId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    deliveryContactName?: string;
+    deliveryPhone?: string;
+    deliveryAddress?: string;
+    deliveryNotes?: string;
+    deliveryFee?: number;
+    notes?: string;
+    items: OrderItemRequest[];
+}
+
+export interface OrderResponse {
+    id: string;
+    restaurantId: string;
+    cashSessionId: string | null;
+    businessDate: string;
+    dailySequence: number;
+    orderNumber: string;
+    publicCode: string;
+    displayCode: string;
+    orderStatus: OrderStatus;
+    kitchenStatus: KitchenStatus;
+    paymentStatus: PaymentStatus;
+    serviceType: ServiceType;
+    tableId: string | null;
+    customerName: string | null;
+    customerPhone: string | null;
+    deliveryStatus: DeliveryStatus;
+    subtotalGrossSnapshot: number;
+    taxAmountSnapshot: number;
+    totalGrossSnapshot: number;
+    tipTotalSnapshot: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface OrderItemDetailResponse {
+    id: string;
+    lineType: OrderLineType;
+    itemId: string | null;
+    templateId: string | null;
+    submenuNodeId: string | null;
+    itemNameSnapshot: string;
+    unitPriceSnapshot: number;
+    theoreticalCostSnapshot: number;
+    quantity: number;
+    subtotalGrossSnapshot: number;
+    notes: string | null;
+    templateSlots: {
+        id: string;
+        templateSlotId: string;
+        slotNameSnapshot: string;
+        minSelectionSnapshot: number;
+        maxSelectionSnapshot: number;
+        sortOrder: number;
+        options: {
+            id: string;
+            slotOptionId: string;
+            itemId: string;
+            itemNameSnapshot: string;
+            quantity: number;
+            surchargeSnapshot: number;
+            theoreticalCostSnapshot: number;
+        }[];
+    }[];
+    taxes: unknown[];
+}
+
+export interface KitchenTicketLineResponse {
+    id: string;
+    orderItemId: string;
+    quantity: number;
+    itemNameSnapshot: string;
+    notes: string | null;
+}
+
+export interface KitchenTicketResponse {
+    id: string;
+    orderId: string;
+    orderNumber: string | null;
+    orderPublicCode: string | null;
+    orderDisplayCode: string | null;
+    status: KitchenTicketStatus;
+    sentAt: string;
+    startedAt: string | null;
+    readyAt: string | null;
+    canceledAt: string | null;
+    lines: KitchenTicketLineResponse[];
+}
+
+export interface OrderPaymentResponse {
+    id: string;
+    paymentMethodId: string;
+    cashSessionId: string;
+    amount: number;
+    tipAmount: number;
+    status: PaymentRecordStatus;
+    externalReference: string | null;
+    createdAt: string;
+}
+
+export interface OrderDetailResponse extends OrderResponse {
+    originCashSessionId: string | null;
+    originDeviceId: string | null;
+    operationModeSnapshot: "PREPAID" | "POSTPAID";
+    deliveryContactName: string | null;
+    deliveryPhone: string | null;
+    deliveryAddress: string | null;
+    deliveryNotes: string | null;
+    deliveryFee: number | null;
+    prepaymentRequiredSnapshot: boolean;
+    taxRateSnapshot: number;
+    notes: string | null;
+    items: OrderItemDetailResponse[];
+    taxes: unknown[];
+    kitchenTickets: KitchenTicketResponse[];
+    payments: OrderPaymentResponse[];
+}
+
+export interface PaymentMethodResponse {
+    id: string;
+    restaurantId: string;
+    code: string;
+    name: string;
+    type: PaymentMethodType;
+    isActive: boolean;
+    requiresReference: boolean;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface PaymentMethodRequest {
+    code?: string;
+    name?: string;
+    type?: PaymentMethodType;
+    isActive?: boolean;
+    requiresReference?: boolean;
+    sortOrder?: number;
+}
+
+export interface PaymentRequest {
+    paymentMethodId: string;
+    orderBillId?: string;
+    amount: number;
+    tipAmount?: number;
+    externalReference?: string;
+    notes?: string;
+}
+
+export interface PaymentResponse {
+    id: string;
+    restaurantId: string;
+    orderId: string;
+    orderBillId: string | null;
+    paymentMethodId: string;
+    cashSessionId: string;
+    amount: number;
+    tipAmount: number;
+    status: PaymentRecordStatus;
+    externalReference: string | null;
+    notes: string | null;
+    createdAt: string;
+}
+
+export interface SplitBillsRequest {
+    mode: BillSplitMode;
+    bills: {
+        label?: string;
+        amount?: number;
+        percentage?: number;
+        items?: { orderItemId: string; quantity: number }[];
+    }[];
+}
+
+export interface OrderBillResponse {
+    id: string;
+    orderId: string;
+    label: string;
+    splitMode: BillSplitMode;
+    subtotalGrossSnapshot: number;
+    tipTotalSnapshot: number;
+    totalPaidSnapshot: number;
+    paymentStatus: BillPaymentStatus;
+    createdAt: string;
+    updatedAt: string;
+    allocations: {
+        id: string;
+        orderItemId: string;
+        quantity: number;
+        amount: number;
+    }[];
 }
 

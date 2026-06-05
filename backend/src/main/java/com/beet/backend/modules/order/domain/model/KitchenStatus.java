@@ -1,8 +1,11 @@
 package com.beet.backend.modules.order.domain.model;
 
 public enum KitchenStatus {
+    NOT_SENT,
     PENDING,
-    ACCEPTED,
+    PREPARING,
+    PARTIALLY_READY,
     READY,
+    ACCEPTED,
     SERVED
 }

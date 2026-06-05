@@ -1,10 +1,8 @@
 package com.beet.backend.modules.order.application.handler;
 
 import com.beet.backend.modules.cash.domain.api.CashSessionQueryPort;
-import com.beet.backend.modules.cash.domain.exception.CashSessionNotFoundException;
-import com.beet.backend.modules.cash.domain.exception.CashSessionRequiredException;
-import com.beet.backend.modules.cash.domain.model.CashSessionDomain;
 import com.beet.backend.modules.order.application.dto.OrderCreateRequest;
+import com.beet.backend.modules.order.domain.api.OrderBillServicePort;
 import com.beet.backend.modules.order.domain.api.OrderServicePort;
 import com.beet.backend.modules.order.domain.model.OrderDomain;
 import com.beet.backend.modules.order.domain.model.ServiceType;
@@ -26,7 +24,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -38,6 +35,9 @@ class OrderHandlerImplTest {
 
     @Mock
     private OrderServicePort orderService;
+
+    @Mock
+    private OrderBillServicePort orderBillService;
 
     @Mock
     private CashSessionQueryPort cashSessionQuery;
@@ -74,46 +74,48 @@ class OrderHandlerImplTest {
     }
 
     @Test
-    void shouldLinkActiveCashSessionWhenCreatingOrder() {
-        UUID cashSessionId = UUID.randomUUID();
-        CashSessionDomain session = CashSessionDomain.builder()
-                .id(cashSessionId)
-                .restaurantId(restaurantId)
-                .openedDeviceId(deviceId)
-                .build();
-        OrderCreateRequest request = new OrderCreateRequest(
-                ServiceType.TAKEOUT,
-                null,
-                "Customer",
-                null,
-                List.of());
+    void shouldCaptureOriginDeviceWhenCreatingDraftOrder() {
+        OrderCreateRequest request = takeoutRequest();
 
         when(deviceContext.getDeviceId()).thenReturn(deviceId);
-        when(cashSessionQuery.getActiveSession(restaurantId, deviceId)).thenReturn(session);
-        when(orderService.createOrder(any(OrderDomain.class), eq(userId)))
+        when(orderService.createDraft(any(OrderDomain.class), eq(userId), eq(deviceId)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         handler.create(restaurantId, request);
 
         ArgumentCaptor<OrderDomain> orderCaptor = ArgumentCaptor.forClass(OrderDomain.class);
-        verify(orderService).createOrder(orderCaptor.capture(), eq(userId));
-        assertEquals(cashSessionId, orderCaptor.getValue().getCashSessionId());
+        verify(orderService).createDraft(orderCaptor.capture(), eq(userId), eq(deviceId));
+        assertEquals(ServiceType.TAKEOUT, orderCaptor.getValue().getServiceType());
+        verify(cashSessionQuery, never()).getActiveSession(any(), any());
     }
 
     @Test
-    void shouldRejectOrderWhenDeviceHasNoActiveCashSession() {
-        OrderCreateRequest request = new OrderCreateRequest(
+    void shouldNotRequireCashSessionWhenCreatingOrder() {
+        OrderCreateRequest request = takeoutRequest();
+
+        when(deviceContext.getDeviceId()).thenReturn(deviceId);
+        when(orderService.createDraft(any(OrderDomain.class), eq(userId), eq(deviceId)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        handler.create(restaurantId, request);
+
+        verify(orderService).createDraft(any(OrderDomain.class), eq(userId), eq(deviceId));
+        verify(cashSessionQuery, never()).getActiveSession(any(), any());
+        verify(orderService, never()).createOrder(any(), any());
+    }
+
+    private OrderCreateRequest takeoutRequest() {
+        return new OrderCreateRequest(
                 ServiceType.TAKEOUT,
                 null,
                 "Customer",
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 List.of());
-
-        when(deviceContext.getDeviceId()).thenReturn(deviceId);
-        when(cashSessionQuery.getActiveSession(restaurantId, deviceId))
-                .thenThrow(CashSessionNotFoundException.forDevice(deviceId));
-
-        assertThrows(CashSessionRequiredException.class, () -> handler.create(restaurantId, request));
-        verify(orderService, never()).createOrder(any(), any());
     }
 }

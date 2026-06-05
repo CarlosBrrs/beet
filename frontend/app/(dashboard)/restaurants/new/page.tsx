@@ -43,8 +43,17 @@ const createRestaurantSchema = z.object({
         allowTakeaway: z.boolean(),
         allowDelivery: z.boolean(),
         maxTableCapacity: z.coerce.number<number>().int().min(1, "Capacity must be at least 1"),
+        timeZone: z.string().trim().min(1, "Time zone is required"),
     })
 })
+
+const timeZones = [
+    "America/Bogota",
+    "America/Lima",
+    "America/Mexico_City",
+    "America/Santiago",
+    "America/New_York",
+]
 
 type CreateRestaurantValues = z.infer<typeof createRestaurantSchema>
 
@@ -66,6 +75,7 @@ export default function CreateRestaurantPage() {
                 allowTakeaway: true,
                 allowDelivery: true,
                 maxTableCapacity: 1,
+                timeZone: "America/Bogota",
             }
         },
     })
@@ -81,8 +91,8 @@ export default function CreateRestaurantPage() {
             await queryClient.invalidateQueries({ queryKey: ['my-restaurants'] })
             toast.success("Restaurant created successfully!")
             router.push(`/restaurants/${res.data.id}/dashboard`)
-        } catch (error: any) {
-            toast.error(error.message || "Failed to create restaurant")
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Failed to create restaurant")
         } finally {
             setIsLoading(false)
         }
@@ -212,6 +222,33 @@ export default function CreateRestaurantPage() {
                                     />
                                     {/* Switches for booleans can be added later if needed, for now using simple checkboxes or defaulting */}
                                 </div>
+                                <FormField
+                                    control={form.control}
+                                    name="settings.timeZone"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Zona horaria</FormLabel>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Selecciona zona horaria" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    {timeZones.map((timeZone) => (
+                                                        <SelectItem key={timeZone} value={timeZone}>
+                                                            {timeZone}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormDescription>
+                                                Afecta numeracion diaria de ordenes, cajas, cortes y reportes.
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
                             </div>
 
                             <Button type="submit" className="w-full" disabled={isLoading}>

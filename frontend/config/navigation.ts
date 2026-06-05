@@ -62,6 +62,30 @@ export const navigationConfig: NavItem[] = [
                 icon: LayoutGrid,
                 module: PermissionModule.TABLES,
             },
+            {
+                title: "POS",
+                href: "/pos",
+                icon: Store,
+                module: PermissionModule.ORDERS,
+            },
+            {
+                title: "Orders",
+                href: "/orders",
+                icon: Receipt,
+                module: PermissionModule.ORDERS,
+            },
+            {
+                title: "Live Orders (KDS)",
+                href: "/orders/active",
+                icon: Utensils,
+                module: PermissionModule.KDS,
+            },
+            {
+                title: "Payment Methods",
+                href: "/payment-methods",
+                icon: CreditCard,
+                module: PermissionModule.PAYMENTS,
+            },
         ]
     },
     {
@@ -90,23 +114,6 @@ export const navigationConfig: NavItem[] = [
                 href: "/templates",
                 icon: Blocks,
                 module: PermissionModule.TEMPLATES,
-            },
-        ]
-    },
-    {
-        title: "Example 1",
-        items: [
-            {
-                title: "POS",
-                href: "/pos",
-                icon: Store,
-                module: PermissionModule.ORDERS,
-            },
-            {
-                title: "Live Orders (KDS)",
-                href: "/orders/active",
-                icon: Utensils,
-                module: PermissionModule.KDS,
             },
         ]
     },

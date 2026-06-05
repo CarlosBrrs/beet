@@ -9,12 +9,15 @@ import com.beet.backend.modules.restaurant.domain.model.RestaurantDomain;
 import com.beet.backend.modules.restaurant.domain.spi.RestaurantPersistencePort;
 import com.beet.backend.modules.restaurant.domain.spi.RestaurantSubscriptionGateway;
 import com.beet.backend.modules.restaurant.domain.spi.RestaurantIdentityGateway;
+import com.beet.backend.modules.restaurant.domain.model.RestaurantSettings;
 import com.beet.backend.modules.restaurant.domain.model.RestaurantWithRole;
 import com.beet.backend.modules.role.domain.model.UserRoleDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DateTimeException;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,6 +25,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RestaurantUseCase implements RestaurantServicePort {
+    private static final String DEFAULT_TIME_ZONE = "America/Bogota";
 
     private final RestaurantPersistencePort persistencePort;
     private final RestaurantSubscriptionGateway subscriptionGateway;
@@ -30,6 +34,8 @@ public class RestaurantUseCase implements RestaurantServicePort {
     @Override
     @Transactional
     public RestaurantWithRole create(RestaurantDomain domain) {
+        domain.setSettings(normalizeSettings(domain.getSettings()));
+
         // 1. Check Max Restaurants Limit
         int maxAllowed = subscriptionGateway.getMaxRestaurantsAllowed(domain.getOwnerId());
         int currentCount = persistencePort.countByOwnerId(domain.getOwnerId());
@@ -176,7 +182,7 @@ return new RestaurantWithRole(
                 .operationMode(
                         domain.getOperationMode() != null ? domain.getOperationMode() : existing.getOperationMode())
                 .isActive(domain.getIsActive() != null ? domain.getIsActive() : existing.getIsActive())
-                .settings(domain.getSettings() != null ? domain.getSettings() : existing.getSettings())
+                .settings(domain.getSettings() != null ? normalizeSettings(domain.getSettings()) : existing.getSettings())
                 .build();
 
         // 3. Validate Unique Constraints (if changed)
@@ -230,6 +236,34 @@ return new RestaurantWithRole(
     @Override
     public boolean existsById(UUID id) {
         return persistencePort.existsById(id);
+    }
+
+    private RestaurantSettings normalizeSettings(RestaurantSettings settings) {
+        if (settings == null) {
+            return RestaurantSettings.builder()
+                    .timeZone(DEFAULT_TIME_ZONE)
+                    .build();
+        }
+        return RestaurantSettings.builder()
+                .prePaymentEnabled(settings.prePaymentEnabled())
+                .allowTakeaway(settings.allowTakeaway())
+                .allowDelivery(settings.allowDelivery())
+                .maxTableCapacity(settings.maxTableCapacity())
+                .taxApplyMode(settings.taxApplyMode())
+                .defaultTaxPercentage(settings.defaultTaxPercentage())
+                .timeZone(normalizeTimeZone(settings.timeZone()))
+                .build();
+    }
+
+    private String normalizeTimeZone(String timeZone) {
+        if (timeZone == null || timeZone.isBlank()) {
+            return DEFAULT_TIME_ZONE;
+        }
+        try {
+            return ZoneId.of(timeZone).getId();
+        } catch (DateTimeException exception) {
+            throw new IllegalArgumentException("Invalid time zone: " + timeZone);
+        }
     }
 
 }

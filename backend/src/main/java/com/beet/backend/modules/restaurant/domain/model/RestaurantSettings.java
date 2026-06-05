@@ -12,7 +12,8 @@ public record RestaurantSettings(
                 Boolean allowDelivery,
                 Integer maxTableCapacity,
                 TaxApplyMode taxApplyMode, // PER_INVOICE or PER_ITEM
-                BigDecimal defaultTaxPercentage) { // Default: 19.00 for Colombia
+                BigDecimal defaultTaxPercentage, // Default: 19.00 for Colombia
+                String timeZone) {
 
         public enum TaxApplyMode {
                 PER_INVOICE, // Single tax % on the invoice header

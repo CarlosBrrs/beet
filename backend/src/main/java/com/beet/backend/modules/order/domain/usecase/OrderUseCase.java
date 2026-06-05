@@ -10,14 +10,28 @@ import com.beet.backend.modules.menu.domain.spi.SubmenuNodeQueryPort;
 import com.beet.backend.modules.order.domain.api.OrderServicePort;
 import com.beet.backend.modules.order.domain.exception.OrderItemNotFoundException;
 import com.beet.backend.modules.order.domain.exception.OrderNotFoundException;
+import com.beet.backend.modules.order.domain.model.DeliveryStatus;
+import com.beet.backend.modules.order.domain.model.InventoryReservationDomain;
+import com.beet.backend.modules.order.domain.model.InventoryReservationStatus;
 import com.beet.backend.modules.order.domain.model.KitchenStatus;
+import com.beet.backend.modules.order.domain.model.KitchenTicketDomain;
+import com.beet.backend.modules.order.domain.model.KitchenTicketLineDomain;
+import com.beet.backend.modules.order.domain.model.KitchenTicketStatus;
 import com.beet.backend.modules.order.domain.model.OrderDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTaxDomain;
+import com.beet.backend.modules.order.domain.model.OrderItemTemplateOptionDomain;
+import com.beet.backend.modules.order.domain.model.OrderItemTemplateSlotDomain;
+import com.beet.backend.modules.order.domain.model.OrderLineType;
+import com.beet.backend.modules.order.domain.model.OrderSearchCriteria;
 import com.beet.backend.modules.order.domain.model.OrderStatus;
 import com.beet.backend.modules.order.domain.model.OrderTaxDefinition;
 import com.beet.backend.modules.order.domain.model.OrderTaxDomain;
+import com.beet.backend.modules.order.domain.model.PaymentDomain;
+import com.beet.backend.modules.order.domain.model.PaymentMethodDomain;
+import com.beet.backend.modules.order.domain.model.PaymentRecordStatus;
 import com.beet.backend.modules.order.domain.model.PaymentStatus;
+import com.beet.backend.modules.order.domain.model.PosCatalogEntryDomain;
 import com.beet.backend.modules.order.domain.model.ServiceType;
 import com.beet.backend.modules.order.domain.spi.OrderPersistencePort;
 import com.beet.backend.modules.order.domain.spi.OrderTableGateway;
@@ -25,6 +39,11 @@ import com.beet.backend.modules.order.domain.spi.OrderTaxQueryPort;
 import com.beet.backend.modules.restaurant.domain.exception.RestaurantNotFoundException;
 import com.beet.backend.modules.restaurant.domain.model.RestaurantDomain;
 import com.beet.backend.modules.restaurant.domain.spi.RestaurantPersistencePort;
+import com.beet.backend.modules.template.domain.exception.TemplateNotFoundException;
+import com.beet.backend.modules.template.domain.model.SlotOptionDomain;
+import com.beet.backend.modules.template.domain.model.TemplateDomain;
+import com.beet.backend.modules.template.domain.model.TemplateSlotDomain;
+import com.beet.backend.modules.template.domain.spi.TemplatePersistencePort;
 import com.beet.backend.shared.domain.model.OperationMode;
 import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import lombok.RequiredArgsConstructor;
@@ -33,9 +52,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.security.SecureRandom;
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -46,182 +70,191 @@ public class OrderUseCase implements OrderServicePort {
     private static final int MONEY_SCALE = 4;
     private static final int RATE_SCALE = 2;
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+    private static final String DEFAULT_TIME_ZONE = "America/Bogota";
+    private static final String PUBLIC_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int PUBLIC_CODE_LENGTH = 6;
+    private static final int PUBLIC_CODE_MAX_ATTEMPTS = 3;
+    private static final SecureRandom PUBLIC_CODE_RANDOM = new SecureRandom();
 
     private final OrderPersistencePort orderPersistence;
     private final OrderTaxQueryPort orderTaxQuery;
     private final RestaurantPersistencePort restaurantPersistence;
     private final ItemPersistencePort itemPersistence;
+    private final TemplatePersistencePort templatePersistence;
     private final SubmenuNodeQueryPort submenuNodeQuery;
     private final OrderTableGateway tableGateway;
 
     @Override
     @Transactional
-    public OrderDomain createOrder(OrderDomain order, UUID userId) {
+    public OrderDomain createDraft(OrderDomain order, UUID userId, UUID deviceId) {
         RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
-        validateTableContext(order);
-        if (order.getCashSessionId() == null) {
-            throw new IllegalArgumentException("Order must be linked to an active cash session.");
-        }
-        if (order.getItems() == null || order.getItems().isEmpty()) {
-            throw new IllegalArgumentException("Order must include at least one item.");
+        validateServiceContext(order);
+        if (order.getServiceType() == ServiceType.DINE_IN) {
+            tableGateway.validateAvailableForOrder(order.getRestaurantId(), order.getTableId());
         }
 
         TaxContext taxContext = resolveTaxContext(restaurant);
         List<OrderItemDomain> preparedItems = buildItems(order.getItems(), restaurant.getId(), userId);
-        Totals totals = computeTotals(preparedItems, taxContext.rate());
+        Totals totals = computeTotals(preparedItems, taxContext.rate(), order.getDeliveryFee());
 
-        order.setOrderStatus(OrderStatus.OPEN);
-        order.setKitchenStatus(KitchenStatus.PENDING);
+        order.setOrderStatus(OrderStatus.DRAFT);
+        order.setKitchenStatus(KitchenStatus.NOT_SENT);
         order.setPaymentStatus(PaymentStatus.UNPAID);
-        order.setPrepaymentRequiredSnapshot(resolvePrepaymentRequired(restaurant));
+        order.setOperationModeSnapshot(restaurant.getOperationMode());
+        order.setOriginDeviceId(deviceId);
+        order.setDeliveryStatus(resolveDeliveryStatus(order.getServiceType()));
+        order.setPrepaymentRequiredSnapshot(restaurant.getOperationMode() == OperationMode.PREPAID);
         order.setTaxRateSnapshot(taxContext.rate());
         order.setSubtotalGrossSnapshot(totals.subtotalGross());
         order.setTaxAmountSnapshot(totals.taxAmount());
         order.setTotalGrossSnapshot(totals.totalGross());
+        order.setTipTotalSnapshot(BigDecimal.ZERO.setScale(MONEY_SCALE));
         order.setCreatedBy(userId);
         order.setUpdatedBy(userId);
         order.setItems(preparedItems);
+        assignFriendlyCodes(order, restaurant);
 
         OrderDomain saved = orderPersistence.save(order);
-        UUID orderId = saved.getId();
+        savePreparedItems(saved.getId(), preparedItems, userId);
+        refreshTaxes(saved, taxContext, totals, userId);
+        return loadOrder(saved.getRestaurantId(), saved.getId());
+    }
 
-        List<OrderItemDomain> savedItems = new ArrayList<>();
-        for (OrderItemDomain item : preparedItems) {
-            item.setOrderId(orderId);
-            item.setCreatedBy(userId);
-            item.setUpdatedBy(userId);
-            savedItems.add(orderPersistence.saveItem(item));
+    @Override
+    @Transactional
+    public OrderDomain confirmOrder(UUID restaurantId, UUID orderId, UUID userId) {
+        OrderDomain order = loadOrder(restaurantId, orderId);
+        if (order.getOrderStatus() != OrderStatus.DRAFT) {
+            throw new IllegalArgumentException("Only draft orders can be confirmed.");
         }
 
-        List<OrderTaxDomain> orderTaxes = buildOrderTaxes(orderId, taxContext, totals.subtotalGross(), userId);
-        orderPersistence.replaceOrderTaxes(orderId, orderTaxes);
+        List<InventoryReservationDomain> reservations = buildReservations(order, userId);
+        orderPersistence.saveReservations(reservations);
 
-        List<OrderItemTaxDomain> itemTaxes = buildOrderItemTaxes(savedItems, taxContext, userId);
-        orderPersistence.replaceOrderItemTaxes(orderId, itemTaxes);
-        applyItemTaxes(savedItems, itemTaxes);
+        boolean prepaid = order.getOperationModeSnapshot() == OperationMode.PREPAID;
+        order.setOrderStatus(prepaid ? OrderStatus.AWAITING_PAYMENT : OrderStatus.OPEN);
+        order.setKitchenStatus(prepaid ? KitchenStatus.NOT_SENT : KitchenStatus.PENDING);
+        order.setUpdatedBy(userId);
+        orderPersistence.update(order);
 
-        saved.setItems(savedItems);
-        saved.setTaxes(orderTaxes);
-        return saved;
+        if (!prepaid) {
+            createKitchenTicket(order, userId);
+        }
+        return loadOrder(restaurantId, orderId);
+    }
+
+    @Override
+    @Transactional
+    public OrderDomain completeOrder(UUID restaurantId, UUID orderId, UUID userId) {
+        OrderDomain order = loadOrder(restaurantId, orderId);
+        if (order.getOrderStatus() != OrderStatus.OPEN) {
+            throw new IllegalArgumentException("Only open orders can be completed.");
+        }
+        if (order.getPaymentStatus() != PaymentStatus.PAID) {
+            throw new IllegalArgumentException("Order must be fully paid before completion.");
+        }
+        order.setOrderStatus(OrderStatus.COMPLETED);
+        order.setUpdatedBy(userId);
+        orderPersistence.update(order);
+        return loadOrder(restaurantId, orderId);
+    }
+
+    @Override
+    @Transactional
+    public OrderDomain cancelOrder(UUID restaurantId, UUID orderId, String reason, UUID userId) {
+        OrderDomain order = loadOrder(restaurantId, orderId);
+        if (order.getOrderStatus() == OrderStatus.COMPLETED) {
+            throw new IllegalArgumentException("Completed orders cannot be canceled.");
+        }
+        for (OrderItemDomain item : order.getItems()) {
+            orderPersistence.releaseReservationsByOrderItem(item.getId(), userId);
+        }
+        order.setOrderStatus(OrderStatus.CANCELED);
+        order.setKitchenStatus(KitchenStatus.NOT_SENT);
+        order.setCancelReason(reason);
+        order.setUpdatedBy(userId);
+        orderPersistence.update(order);
+        return loadOrder(restaurantId, orderId);
+    }
+
+    @Override
+    @Transactional
+    public OrderDomain createOrder(OrderDomain order, UUID userId) {
+        OrderDomain draft = createDraft(order, userId, order.getOriginDeviceId());
+        return confirmOrder(draft.getRestaurantId(), draft.getId(), userId);
     }
 
     @Override
     @Transactional
     public OrderDomain addItem(UUID restaurantId, UUID orderId, OrderItemDomain item, UUID userId) {
         OrderDomain order = loadOrder(restaurantId, orderId);
-        RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
-        TaxContext taxContext = resolveTaxContext(restaurant);
+        if (order.getOrderStatus() != OrderStatus.OPEN && order.getOrderStatus() != OrderStatus.DRAFT) {
+            throw new IllegalArgumentException("Items can only be added to draft or open orders.");
+        }
 
-        OrderItemDomain prepared = buildItem(item, restaurant.getId(), userId);
+        OrderItemDomain prepared = buildItem(item, restaurantId, userId);
         prepared.setOrderId(orderId);
+        OrderItemDomain saved = orderPersistence.saveItem(prepared);
+        orderPersistence.saveTemplateSnapshots(saved);
 
-        OrderItemDomain savedItem = orderPersistence.saveItem(prepared);
         List<OrderItemDomain> items = new ArrayList<>(order.getItems());
-        items.add(savedItem);
-
-        Totals totals = computeTotals(items, taxContext.rate());
+        items.add(saved);
         order.setItems(items);
-        order.setTaxRateSnapshot(taxContext.rate());
-        order.setSubtotalGrossSnapshot(totals.subtotalGross());
-        order.setTaxAmountSnapshot(totals.taxAmount());
-        order.setTotalGrossSnapshot(totals.totalGross());
-        order.setUpdatedBy(userId);
+        recalculateAndPersist(order, userId);
 
-        OrderDomain updated = orderPersistence.update(order);
-
-        List<OrderTaxDomain> orderTaxes = buildOrderTaxes(orderId, taxContext, totals.subtotalGross(), userId);
-        orderPersistence.replaceOrderTaxes(orderId, orderTaxes);
-
-        List<OrderItemTaxDomain> itemTaxes = buildOrderItemTaxes(items, taxContext, userId);
-        orderPersistence.replaceOrderItemTaxes(orderId, itemTaxes);
-        applyItemTaxes(items, itemTaxes);
-
-        updated.setItems(items);
-        updated.setTaxes(orderTaxes);
-        return updated;
+        if (order.getOrderStatus() == OrderStatus.OPEN) {
+            List<InventoryReservationDomain> reservations = buildReservationsForItem(order, saved, userId);
+            orderPersistence.saveReservations(reservations);
+            createKitchenTicket(order, List.of(saved), userId);
+        }
+        return loadOrder(restaurantId, orderId);
     }
 
     @Override
     @Transactional
-    public OrderDomain updateItemQuantity(
-            UUID restaurantId, UUID orderId, UUID orderItemId, BigDecimal quantity, UUID userId) {
+    public OrderDomain updateItemQuantity(UUID restaurantId, UUID orderId, UUID orderItemId,
+            BigDecimal quantity, UUID userId) {
         OrderDomain order = loadOrder(restaurantId, orderId);
-        RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
-        TaxContext taxContext = resolveTaxContext(restaurant);
-
+        if (order.getOrderStatus() != OrderStatus.DRAFT) {
+            throw new IllegalArgumentException("Quantity can only be edited while the order is draft.");
+        }
         if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than zero.");
         }
-
         OrderItemDomain target = findItem(order, orderItemId);
-        BigDecimal unitPrice = defaulted(target.getUnitPriceSnapshot());
-        BigDecimal subtotal = unitPrice.multiply(quantity).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-
-        target.setQuantity(quantity);
+        BigDecimal subtotal = defaulted(target.getUnitPriceSnapshot()).multiply(quantity)
+                .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        target.setQuantity(quantity.setScale(MONEY_SCALE, RoundingMode.HALF_UP));
         target.setSubtotalGrossSnapshot(subtotal);
-
-        orderPersistence.updateItemQuantity(orderItemId, quantity, subtotal, userId);
-
-        Totals totals = computeTotals(order.getItems(), taxContext.rate());
-        order.setTaxRateSnapshot(taxContext.rate());
-        order.setSubtotalGrossSnapshot(totals.subtotalGross());
-        order.setTaxAmountSnapshot(totals.taxAmount());
-        order.setTotalGrossSnapshot(totals.totalGross());
-        order.setUpdatedBy(userId);
-
-        OrderDomain updated = orderPersistence.update(order);
-
-        List<OrderTaxDomain> orderTaxes = buildOrderTaxes(orderId, taxContext, totals.subtotalGross(), userId);
-        orderPersistence.replaceOrderTaxes(orderId, orderTaxes);
-
-        List<OrderItemTaxDomain> itemTaxes = buildOrderItemTaxes(order.getItems(), taxContext, userId);
-        orderPersistence.replaceOrderItemTaxes(orderId, itemTaxes);
-        applyItemTaxes(order.getItems(), itemTaxes);
-
-        updated.setItems(order.getItems());
-        updated.setTaxes(orderTaxes);
-        return updated;
+        orderPersistence.updateItemQuantity(orderItemId, target.getQuantity(), subtotal, userId);
+        recalculateAndPersist(order, userId);
+        return loadOrder(restaurantId, orderId);
     }
 
     @Override
     @Transactional
     public OrderDomain removeItem(UUID restaurantId, UUID orderId, UUID orderItemId, UUID userId) {
         OrderDomain order = loadOrder(restaurantId, orderId);
-        RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
-        TaxContext taxContext = resolveTaxContext(restaurant);
-
+        if (order.getOrderStatus() != OrderStatus.DRAFT && order.getOrderStatus() != OrderStatus.OPEN) {
+            throw new IllegalArgumentException("Items can only be removed from draft or open orders.");
+        }
         findItem(order, orderItemId);
+        orderPersistence.releaseReservationsByOrderItem(orderItemId, userId);
         orderPersistence.deleteItem(orderItemId);
-
-        List<OrderItemDomain> remaining = new ArrayList<>(order.getItems());
-        remaining.removeIf(item -> orderItemId.equals(item.getId()));
-
-        Totals totals = computeTotals(remaining, taxContext.rate());
-        order.setItems(remaining);
-        order.setTaxRateSnapshot(taxContext.rate());
-        order.setSubtotalGrossSnapshot(totals.subtotalGross());
-        order.setTaxAmountSnapshot(totals.taxAmount());
-        order.setTotalGrossSnapshot(totals.totalGross());
-        order.setUpdatedBy(userId);
-
-        OrderDomain updated = orderPersistence.update(order);
-
-        List<OrderTaxDomain> orderTaxes = buildOrderTaxes(orderId, taxContext, totals.subtotalGross(), userId);
-        orderPersistence.replaceOrderTaxes(orderId, orderTaxes);
-
-        List<OrderItemTaxDomain> itemTaxes = buildOrderItemTaxes(remaining, taxContext, userId);
-        orderPersistence.replaceOrderItemTaxes(orderId, itemTaxes);
-        applyItemTaxes(remaining, itemTaxes);
-
-        updated.setItems(remaining);
-        updated.setTaxes(orderTaxes);
-        return updated;
+        order.getItems().removeIf(item -> orderItemId.equals(item.getId()));
+        recalculateAndPersist(order, userId);
+        return loadOrder(restaurantId, orderId);
     }
 
     @Override
-    public java.util.Optional<OrderDomain> findById(UUID restaurantId, UUID orderId) {
+    public Optional<OrderDomain> findById(UUID restaurantId, UUID orderId) {
         return orderPersistence.findByIdWithItems(orderId)
                 .filter(order -> restaurantId.equals(order.getRestaurantId()));
+    }
+
+    @Override
+    public PageResponse<OrderDomain> findAllPaged(OrderSearchCriteria criteria) {
+        return orderPersistence.findAllPaged(criteria);
     }
 
     @Override
@@ -229,25 +262,440 @@ public class OrderUseCase implements OrderServicePort {
         return orderPersistence.findAllPaged(restaurantId, page, size, search);
     }
 
-    private RestaurantDomain loadRestaurant(UUID restaurantId) {
-        return restaurantPersistence.findById(restaurantId)
-                .orElseThrow(() -> RestaurantNotFoundException.forId(restaurantId));
+    @Override
+    public PageResponse<PosCatalogEntryDomain> findPosCatalog(UUID restaurantId, int page, int size, String search,
+            UUID menuId, UUID submenuId, String availability, String referenceType, String sort) {
+        return orderPersistence.findPosCatalog(
+                restaurantId, page, size, search, menuId, submenuId, availability, referenceType, sort);
     }
 
-    private void validateTableContext(OrderDomain order) {
+    @Override
+    @Transactional
+    public KitchenTicketDomain updateKitchenTicketStatus(UUID restaurantId, UUID ticketId, KitchenTicketStatus status,
+            UUID userId) {
+        KitchenTicketDomain current = orderPersistence.findKitchenTicket(restaurantId, ticketId)
+                .orElseThrow(() -> new IllegalArgumentException("Kitchen ticket not found."));
+        if (status == null) {
+            throw new IllegalArgumentException("Kitchen ticket status is required.");
+        }
+        validateKitchenTransition(current.getStatus(), status);
+        if (status == KitchenTicketStatus.PREPARING) {
+            orderPersistence.consumeReservationsByTicket(restaurantId, ticketId, userId);
+        }
+        if (status == KitchenTicketStatus.CANCELED && current.getStatus() == KitchenTicketStatus.PENDING) {
+            for (KitchenTicketLineDomain line : current.getLines()) {
+                orderPersistence.releaseReservationsByOrderItem(line.getOrderItemId(), userId);
+            }
+        }
+        KitchenTicketDomain updated = orderPersistence.updateKitchenTicketStatus(restaurantId, ticketId, status, userId);
+        refreshKitchenSummary(restaurantId, updated.getOrderId(), userId);
+        return updated;
+    }
+
+    @Override
+    public PageResponse<KitchenTicketDomain> listKitchenTickets(UUID restaurantId, KitchenTicketStatus status,
+            int page, int size) {
+        return orderPersistence.findKitchenTickets(restaurantId, status, page, size);
+    }
+
+    @Override
+    public List<PaymentMethodDomain> listPaymentMethods(UUID restaurantId) {
+        return orderPersistence.findPaymentMethods(restaurantId);
+    }
+
+    @Override
+    @Transactional
+    public PaymentMethodDomain createPaymentMethod(PaymentMethodDomain method, UUID userId) {
+        method.setCreatedBy(userId);
+        method.setUpdatedBy(userId);
+        return orderPersistence.savePaymentMethod(method);
+    }
+
+    @Override
+    @Transactional
+    public PaymentMethodDomain updatePaymentMethod(UUID restaurantId, UUID methodId, Boolean isActive,
+            String name, Boolean requiresReference, Integer sortOrder, UUID userId) {
+        PaymentMethodDomain method = orderPersistence.findPaymentMethod(restaurantId, methodId)
+                .orElseThrow(() -> new IllegalArgumentException("Payment method not found."));
+        if (isActive != null) {
+            method.setActive(isActive);
+        }
+        if (name != null && !name.isBlank()) {
+            method.setName(name.trim());
+        }
+        if (requiresReference != null) {
+            method.setRequiresReference(requiresReference);
+        }
+        if (sortOrder != null) {
+            method.setSortOrder(sortOrder);
+        }
+        method.setUpdatedBy(userId);
+        return orderPersistence.updatePaymentMethod(method);
+    }
+
+    @Override
+    @Transactional
+    public PaymentDomain registerPayment(UUID restaurantId, UUID orderId, PaymentDomain payment,
+            UUID userId, UUID deviceId) {
+        OrderDomain order = loadOrder(restaurantId, orderId);
+        PaymentMethodDomain method = orderPersistence.findPaymentMethod(restaurantId, payment.getPaymentMethodId())
+                .orElseThrow(() -> new IllegalArgumentException("Payment method not found."));
+        if (!method.isActive()) {
+            throw new IllegalArgumentException("Payment method is inactive.");
+        }
+        if (method.isRequiresReference()
+                && (payment.getExternalReference() == null || payment.getExternalReference().isBlank())) {
+            throw new IllegalArgumentException("Payment method requires an external reference.");
+        }
+        payment.setRestaurantId(restaurantId);
+        payment.setOrderId(orderId);
+        payment.setDeviceId(deviceId);
+        payment.setStatus(PaymentRecordStatus.RECORDED);
+        payment.setCreatedBy(userId);
+        PaymentDomain saved = orderPersistence.savePayment(payment);
+
+        BigDecimal paid = orderPersistence.sumRecordedPayments(orderId);
+        BigDecimal tips = orderPersistence.sumRecordedTips(orderId);
+        order.setTipTotalSnapshot(tips);
+        order.setPaymentStatus(resolvePaymentStatus(order, paid));
+        if (order.getOrderStatus() == OrderStatus.AWAITING_PAYMENT
+                && order.getPaymentStatus() == PaymentStatus.PAID) {
+            order.setOrderStatus(OrderStatus.OPEN);
+            order.setKitchenStatus(KitchenStatus.PENDING);
+            createKitchenTicket(order, userId);
+        }
+        order.setUpdatedBy(userId);
+        orderPersistence.update(order);
+        return saved;
+    }
+
+    private void recalculateAndPersist(OrderDomain order, UUID userId) {
+        RestaurantDomain restaurant = loadRestaurant(order.getRestaurantId());
+        TaxContext taxContext = resolveTaxContext(restaurant);
+        Totals totals = computeTotals(order.getItems(), taxContext.rate(), order.getDeliveryFee());
+        order.setTaxRateSnapshot(taxContext.rate());
+        order.setSubtotalGrossSnapshot(totals.subtotalGross());
+        order.setTaxAmountSnapshot(totals.taxAmount());
+        order.setTotalGrossSnapshot(totals.totalGross());
+        order.setUpdatedBy(userId);
+        orderPersistence.update(order);
+        refreshTaxes(order, taxContext, totals, userId);
+    }
+
+    private void savePreparedItems(UUID orderId, List<OrderItemDomain> preparedItems, UUID userId) {
+        List<OrderItemDomain> savedItems = new ArrayList<>();
+        for (OrderItemDomain item : preparedItems) {
+            item.setOrderId(orderId);
+            item.setCreatedBy(userId);
+            item.setUpdatedBy(userId);
+            OrderItemDomain saved = orderPersistence.saveItem(item);
+            saved.setTemplateSlots(item.getTemplateSlots());
+            orderPersistence.saveTemplateSnapshots(saved);
+            savedItems.add(saved);
+        }
+        preparedItems.clear();
+        preparedItems.addAll(savedItems);
+    }
+
+    private void refreshTaxes(OrderDomain order, TaxContext taxContext, Totals totals, UUID userId) {
+        List<OrderTaxDomain> orderTaxes = buildOrderTaxes(order.getId(), taxContext, totals.subtotalGross(), userId);
+        orderPersistence.replaceOrderTaxes(order.getId(), orderTaxes);
+        List<OrderItemTaxDomain> itemTaxes = buildOrderItemTaxes(order.getItems(), taxContext, userId);
+        orderPersistence.replaceOrderItemTaxes(order.getId(), itemTaxes);
+    }
+
+    private List<OrderItemDomain> buildItems(List<OrderItemDomain> items, UUID restaurantId, UUID userId) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Order must include at least one item.");
+        }
+        List<OrderItemDomain> prepared = new ArrayList<>();
+        for (OrderItemDomain item : items) {
+            prepared.add(buildItem(item, restaurantId, userId));
+        }
+        return prepared;
+    }
+
+    private OrderItemDomain buildItem(OrderItemDomain item, UUID restaurantId, UUID userId) {
+        OrderLineType lineType = item.getLineType() != null ? item.getLineType() : OrderLineType.PRODUCT;
+        if (lineType == OrderLineType.PRODUCT) {
+            return buildProductItem(item, restaurantId, userId);
+        }
+        return buildTemplateItem(item, restaurantId, userId);
+    }
+
+    private OrderItemDomain buildProductItem(OrderItemDomain item, UUID restaurantId, UUID userId) {
+        if (item.getItemId() == null) {
+            throw new IllegalArgumentException("Product order item must include itemId.");
+        }
+        ItemDomain sourceItem = loadProduct(restaurantId, item.getItemId());
+        validateSubmenuNode(item, sourceItem.getId(), null);
+        BigDecimal quantity = normalizeQuantity(item.getQuantity());
+        BigDecimal unitPrice = defaulted(sourceItem.getSalePrice());
+        if (unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Published product must have a sale price.");
+        }
+        return OrderItemDomain.builder()
+                .lineType(OrderLineType.PRODUCT)
+                .itemId(sourceItem.getId())
+                .submenuNodeId(item.getSubmenuNodeId())
+                .itemNameSnapshot(sourceItem.getName())
+                .unitPriceSnapshot(unitPrice)
+                .theoreticalCostSnapshot(defaulted(sourceItem.getTheoreticalCost()))
+                .quantity(quantity)
+                .subtotalGrossSnapshot(unitPrice.multiply(quantity).setScale(MONEY_SCALE, RoundingMode.HALF_UP))
+                .notes(item.getNotes())
+                .createdBy(userId)
+                .updatedBy(userId)
+                .build();
+    }
+
+    private OrderItemDomain buildTemplateItem(OrderItemDomain item, UUID restaurantId, UUID userId) {
+        if (item.getTemplateId() == null) {
+            throw new IllegalArgumentException("Template order item must include templateId.");
+        }
+        TemplateDomain template = templatePersistence.findById(item.getTemplateId())
+                .orElseThrow(() -> TemplateNotFoundException.forId(item.getTemplateId()));
+        if (!restaurantId.equals(template.getRestaurantId()) || !template.isActive()) {
+            throw new IllegalArgumentException("Template is not available for this restaurant.");
+        }
+        validateSubmenuNode(item, null, item.getTemplateId());
+        BigDecimal quantity = normalizeQuantity(item.getQuantity());
+        List<OrderItemTemplateSlotDomain> slotSnapshots = buildTemplateSlotSnapshots(template, item);
+        BigDecimal surchargeTotal = slotSnapshots.stream()
+                .flatMap(slot -> slot.getOptions().stream())
+                .map(option -> defaulted(option.getSurchargeSnapshot()).multiply(normalizeQuantity(option.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal unitPrice = defaulted(template.getBasePrice()).add(surchargeTotal);
+        if (unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Template item must have a positive price.");
+        }
+        return OrderItemDomain.builder()
+                .lineType(OrderLineType.TEMPLATE)
+                .templateId(item.getTemplateId())
+                .submenuNodeId(item.getSubmenuNodeId())
+                .itemNameSnapshot(template.getName())
+                .unitPriceSnapshot(unitPrice)
+                .theoreticalCostSnapshot(slotSnapshots.stream()
+                        .flatMap(slot -> slot.getOptions().stream())
+                        .map(option -> defaulted(option.getTheoreticalCostSnapshot()).multiply(normalizeQuantity(option.getQuantity())))
+                        .reduce(BigDecimal.ZERO, BigDecimal::add))
+                .quantity(quantity)
+                .subtotalGrossSnapshot(unitPrice.multiply(quantity).setScale(MONEY_SCALE, RoundingMode.HALF_UP))
+                .notes(item.getNotes())
+                .templateSlots(slotSnapshots)
+                .createdBy(userId)
+                .updatedBy(userId)
+                .build();
+    }
+
+    private List<OrderItemTemplateSlotDomain> buildTemplateSlotSnapshots(TemplateDomain template, OrderItemDomain item) {
+        if (item.getTemplateSlots() == null || item.getTemplateSlots().isEmpty()) {
+            throw new IllegalArgumentException("Template order item must include slot selections.");
+        }
+        List<OrderItemTemplateSlotDomain> snapshots = new ArrayList<>();
+        for (TemplateSlotDomain slot : template.getSlots()) {
+            OrderItemTemplateSlotDomain selection = item.getTemplateSlots().stream()
+                    .filter(candidate -> slot.getId().equals(candidate.getTemplateSlotId()))
+                    .findFirst()
+                    .orElse(null);
+            int selectedUnits = selection == null ? 0 : selection.getOptions().stream()
+                    .map(option -> normalizeQuantity(option.getQuantity()).intValue())
+                    .reduce(0, Integer::sum);
+            if (selectedUnits < slot.getMinSelection() || selectedUnits > slot.getMaxSelection()) {
+                throw new IllegalArgumentException("Invalid selection count for slot: " + slot.getName());
+            }
+            List<OrderItemTemplateOptionDomain> options = new ArrayList<>();
+            if (selection != null) {
+                for (OrderItemTemplateOptionDomain selected : selection.getOptions()) {
+                    SlotOptionDomain sourceOption = slot.getOptions().stream()
+                            .filter(option -> option.getId().equals(selected.getSlotOptionId()))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalArgumentException("Invalid slot option selected."));
+                    BigDecimal selectedQuantity = normalizeQuantity(selected.getQuantity());
+                    if (selectedQuantity.intValue() > sourceOption.getMaxQuantity()) {
+                        throw new IllegalArgumentException("Selected quantity exceeds option max quantity.");
+                    }
+                    ItemDomain product = loadProduct(template.getRestaurantId(), sourceOption.getItemId());
+                    options.add(OrderItemTemplateOptionDomain.builder()
+                            .slotOptionId(sourceOption.getId())
+                            .itemId(product.getId())
+                            .itemNameSnapshot(product.getName())
+                            .quantity(selectedQuantity)
+                            .surchargeSnapshot(defaulted(sourceOption.getSurcharge()))
+                            .theoreticalCostSnapshot(defaulted(product.getTheoreticalCost()))
+                            .build());
+                }
+            }
+            snapshots.add(OrderItemTemplateSlotDomain.builder()
+                    .templateSlotId(slot.getId())
+                    .slotNameSnapshot(slot.getName())
+                    .minSelectionSnapshot(slot.getMinSelection())
+                    .maxSelectionSnapshot(slot.getMaxSelection())
+                    .sortOrder(slot.getSortOrder())
+                    .options(options)
+                    .build());
+        }
+        return snapshots;
+    }
+
+    private ItemDomain loadProduct(UUID restaurantId, UUID itemId) {
+        ItemDomain item = itemPersistence.findById(itemId)
+                .orElseThrow(() -> ItemNotFoundException.forId(itemId));
+        if (!restaurantId.equals(item.getRestaurantId()) || item.getItemClass() != ItemClass.PRODUCT || !item.isActive()) {
+            throw new IllegalArgumentException("Product is not available for this restaurant.");
+        }
+        item.setRecipeLines(itemPersistence.findRecipeLinesByParent(item.getId()));
+        return item;
+    }
+
+    private void validateSubmenuNode(OrderItemDomain item, UUID itemId, UUID templateId) {
+        if (item.getSubmenuNodeId() == null) {
+            throw new IllegalArgumentException("Order items must come from a published submenu node.");
+        }
+        SubmenuNodeDomain node = submenuNodeQuery.findNodeById(item.getSubmenuNodeId())
+                .orElseThrow(() -> new IllegalArgumentException("Submenu node not found."));
+        if (itemId != null) {
+            if (node.nodeType() != SubmenuNodeType.PRODUCT || !itemId.equals(node.itemId())) {
+                throw new IllegalArgumentException("Submenu node does not match the product.");
+            }
+            return;
+        }
+        if (node.nodeType() != SubmenuNodeType.TEMPLATE || !templateId.equals(node.templateId())) {
+            throw new IllegalArgumentException("Submenu node does not match the template.");
+        }
+    }
+
+    private void validateServiceContext(OrderDomain order) {
         if (order.getServiceType() == null) {
             throw new IllegalArgumentException("Order must include a service type.");
         }
-        if (order.getServiceType() == ServiceType.DINE_IN) {
-            if (order.getTableId() == null) {
-                throw new IllegalArgumentException("Dine-in order must include a restaurant table.");
-            }
-            tableGateway.validateAvailableForOrder(order.getRestaurantId(), order.getTableId());
-            return;
+        if (order.getServiceType() == ServiceType.DINE_IN && order.getTableId() == null) {
+            throw new IllegalArgumentException("Dine-in order must include a restaurant table.");
         }
-        if (order.getTableId() != null) {
+        if (order.getServiceType() != ServiceType.DINE_IN && order.getTableId() != null) {
             throw new IllegalArgumentException("Only dine-in orders can include a restaurant table.");
         }
+        if (order.getServiceType() == ServiceType.DELIVERY) {
+            if (isBlank(order.getDeliveryAddress()) || isBlank(order.getDeliveryPhone())) {
+                throw new IllegalArgumentException("Delivery orders require address and phone.");
+            }
+        }
+    }
+
+    private List<InventoryReservationDomain> buildReservations(OrderDomain order, UUID userId) {
+        List<InventoryReservationDomain> reservations = new ArrayList<>();
+        for (OrderItemDomain item : order.getItems()) {
+            reservations.addAll(buildReservationsForItem(order, item, userId));
+        }
+        return reservations;
+    }
+
+    private List<InventoryReservationDomain> buildReservationsForItem(OrderDomain order, OrderItemDomain item, UUID userId) {
+        List<InventoryReservationDomain> reservations = new ArrayList<>();
+        List<ProductReservationSource> productSources = new ArrayList<>();
+        if (item.getLineType() == OrderLineType.PRODUCT) {
+            productSources.add(new ProductReservationSource(item.getItemId(), BigDecimal.ONE));
+        } else {
+            item.getTemplateSlots().forEach(slot -> slot.getOptions()
+                    .forEach(option -> productSources.add(new ProductReservationSource(
+                            option.getItemId(), normalizeQuantity(option.getQuantity())))));
+        }
+        for (ProductReservationSource source : productSources) {
+            ItemDomain product = loadProduct(order.getRestaurantId(), source.productId());
+            if (!product.isInventoryTracked() || product.getRecipeLines().isEmpty()) {
+                continue;
+            }
+            product.getRecipeLines().forEach(line -> {
+                if (line.getMasterIngredientId() == null) {
+                    return;
+                }
+                BigDecimal factor = itemPersistence.getUnitFactorToBase(line.getUnitId());
+                BigDecimal quantity = line.getQuantity()
+                        .multiply(factor)
+                        .multiply(defaulted(item.getQuantity()))
+                        .multiply(source.multiplier())
+                        .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+                reservations.add(InventoryReservationDomain.builder()
+                        .restaurantId(order.getRestaurantId())
+                        .orderId(order.getId())
+                        .orderItemId(item.getId())
+                        .masterIngredientId(line.getMasterIngredientId())
+                        .quantityBase(quantity)
+                        .status(InventoryReservationStatus.ACTIVE)
+                        .createdBy(userId)
+                        .updatedBy(userId)
+                        .build());
+            });
+        }
+        return reservations;
+    }
+
+    private KitchenTicketDomain createKitchenTicket(OrderDomain order, UUID userId) {
+        return createKitchenTicket(order, order.getItems(), userId);
+    }
+
+    private KitchenTicketDomain createKitchenTicket(OrderDomain order, List<OrderItemDomain> items, UUID userId) {
+        KitchenTicketDomain ticket = KitchenTicketDomain.builder()
+                .restaurantId(order.getRestaurantId())
+                .orderId(order.getId())
+                .status(KitchenTicketStatus.PENDING)
+                .sentBy(userId)
+                .lines(items.stream()
+                        .map(item -> KitchenTicketLineDomain.builder()
+                                .orderItemId(item.getId())
+                                .quantity(item.getQuantity())
+                                .itemNameSnapshot(item.getItemNameSnapshot())
+                                .notes(item.getNotes())
+                                .build())
+                        .toList())
+                .build();
+        return orderPersistence.saveKitchenTicket(ticket);
+    }
+
+    private void validateKitchenTransition(KitchenTicketStatus current, KitchenTicketStatus target) {
+        if (current == target) {
+            return;
+        }
+        if (current == KitchenTicketStatus.CANCELED || current == KitchenTicketStatus.READY) {
+            throw new IllegalArgumentException("Final kitchen tickets cannot change status.");
+        }
+        if (current == KitchenTicketStatus.PENDING
+                && (target == KitchenTicketStatus.PREPARING || target == KitchenTicketStatus.CANCELED)) {
+            return;
+        }
+        if (current == KitchenTicketStatus.PREPARING
+                && (target == KitchenTicketStatus.READY || target == KitchenTicketStatus.CANCELED)) {
+            return;
+        }
+        throw new IllegalArgumentException("Invalid kitchen ticket status transition.");
+    }
+
+    private void refreshKitchenSummary(UUID restaurantId, UUID orderId, UUID userId) {
+        OrderDomain order = loadOrder(restaurantId, orderId);
+        List<KitchenTicketStatus> statuses = order.getKitchenTickets().stream()
+                .map(KitchenTicketDomain::getStatus)
+                .filter(status -> status != KitchenTicketStatus.CANCELED)
+                .toList();
+        KitchenStatus summary;
+        if (statuses.isEmpty()) {
+            summary = KitchenStatus.NOT_SENT;
+        } else if (statuses.stream().allMatch(status -> status == KitchenTicketStatus.READY)) {
+            summary = KitchenStatus.READY;
+        } else if (statuses.stream().anyMatch(status -> status == KitchenTicketStatus.READY)) {
+            summary = KitchenStatus.PARTIALLY_READY;
+        } else if (statuses.stream().anyMatch(status -> status == KitchenTicketStatus.PREPARING)) {
+            summary = KitchenStatus.PREPARING;
+        } else {
+            summary = KitchenStatus.PENDING;
+        }
+        order.setKitchenStatus(summary);
+        order.setUpdatedBy(userId);
+        orderPersistence.update(order);
+    }
+
+    private RestaurantDomain loadRestaurant(UUID restaurantId) {
+        return restaurantPersistence.findById(restaurantId)
+                .orElseThrow(() -> RestaurantNotFoundException.forId(restaurantId));
     }
 
     private OrderDomain loadOrder(UUID restaurantId, UUID orderId) {
@@ -262,70 +710,27 @@ public class OrderUseCase implements OrderServicePort {
                 .orElseThrow(() -> OrderItemNotFoundException.forId(orderItemId));
     }
 
-    private List<OrderItemDomain> buildItems(List<OrderItemDomain> items, UUID restaurantId, UUID userId) {
-        List<OrderItemDomain> prepared = new ArrayList<>();
-        for (OrderItemDomain item : items) {
-            prepared.add(buildItem(item, restaurantId, userId));
+    private PaymentStatus resolvePaymentStatus(OrderDomain order, BigDecimal paid) {
+        BigDecimal total = defaulted(order.getTotalGrossSnapshot());
+        if (paid.compareTo(BigDecimal.ZERO) <= 0) {
+            return PaymentStatus.UNPAID;
         }
-        return prepared;
+        if (paid.compareTo(total) >= 0) {
+            return PaymentStatus.PAID;
+        }
+        return PaymentStatus.PARTIALLY_PAID;
     }
 
-    private OrderItemDomain buildItem(OrderItemDomain item, UUID restaurantId, UUID userId) {
-        if (item.getItemId() == null) {
-            throw new IllegalArgumentException("Order item must include an itemId.");
-        }
-
-        ItemDomain sourceItem = itemPersistence.findById(item.getItemId())
-                .orElseThrow(() -> ItemNotFoundException.forId(item.getItemId()));
-        if (!restaurantId.equals(sourceItem.getRestaurantId())) {
-            throw new IllegalArgumentException("Item does not belong to the restaurant.");
-        }
-        if (sourceItem.getItemClass() != ItemClass.PRODUCT) {
-            throw new IllegalArgumentException("Only saleable products can be added to orders.");
-        }
-
-        validateSubmenuNode(item, sourceItem);
-
-        BigDecimal quantity = normalizeQuantity(item.getQuantity());
-        BigDecimal unitPrice = item.getUnitPriceSnapshot() != null
-                ? item.getUnitPriceSnapshot()
-                : defaulted(sourceItem.getSalePrice());
-        BigDecimal subtotal = unitPrice.multiply(quantity).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-
-        return OrderItemDomain.builder()
-                .orderId(item.getOrderId())
-                .itemId(sourceItem.getId())
-                .submenuNodeId(item.getSubmenuNodeId())
-                .itemNameSnapshot(sourceItem.getName())
-                .unitPriceSnapshot(unitPrice)
-                .theoreticalCostSnapshot(defaulted(sourceItem.getTheoreticalCost()))
-                .quantity(quantity)
-                .subtotalGrossSnapshot(subtotal)
-                .createdBy(userId)
-                .updatedBy(userId)
-                .build();
+    private DeliveryStatus resolveDeliveryStatus(ServiceType serviceType) {
+        return serviceType == ServiceType.DELIVERY ? DeliveryStatus.PENDING_DISPATCH : DeliveryStatus.NOT_APPLICABLE;
     }
 
-    private void validateSubmenuNode(OrderItemDomain item, ItemDomain sourceItem) {
-        if (item.getSubmenuNodeId() == null) {
-            return;
-        }
-        SubmenuNodeDomain node = submenuNodeQuery.findNodeById(item.getSubmenuNodeId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Submenu node not found: " + item.getSubmenuNodeId()));
-        if (node.nodeType() != SubmenuNodeType.PRODUCT) {
-            throw new IllegalArgumentException("Submenu node is not a product node.");
-        }
-        if (node.itemId() != null && !node.itemId().equals(sourceItem.getId())) {
-            throw new IllegalArgumentException("Submenu node does not match the item.");
-        }
-    }
-
-    private Totals computeTotals(List<OrderItemDomain> items, BigDecimal rate) {
+    private Totals computeTotals(List<OrderItemDomain> items, BigDecimal rate, BigDecimal deliveryFee) {
         BigDecimal subtotal = items.stream()
                 .map(OrderItemDomain::getSubtotalGrossSnapshot)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .add(defaulted(deliveryFee))
                 .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
         BigDecimal taxAmount = calculateTaxFromGross(subtotal, rate);
         return new Totals(subtotal, taxAmount, subtotal);
@@ -359,13 +764,6 @@ public class OrderUseCase implements OrderServicePort {
         return new TaxContext(definitions, normalizeRate(rate));
     }
 
-    private boolean resolvePrepaymentRequired(RestaurantDomain restaurant) {
-        if (restaurant.getSettings() != null && restaurant.getSettings().prePaymentEnabled() != null) {
-            return restaurant.getSettings().prePaymentEnabled();
-        }
-        return restaurant.getOperationMode() == OperationMode.PREPAID;
-    }
-
     private List<OrderTaxDomain> buildOrderTaxes(UUID orderId, TaxContext taxContext,
             BigDecimal baseGross, UUID userId) {
         if (taxContext.definitions().isEmpty() || taxContext.rate().compareTo(BigDecimal.ZERO) <= 0) {
@@ -374,14 +772,13 @@ public class OrderUseCase implements OrderServicePort {
         List<OrderTaxDomain> taxes = new ArrayList<>();
         for (OrderTaxDefinition definition : taxContext.definitions()) {
             BigDecimal rate = normalizeRate(definition.rate());
-            BigDecimal amount = calculateTaxFromGross(baseGross, rate);
             taxes.add(OrderTaxDomain.builder()
                     .orderId(orderId)
                     .taxId(definition.id())
                     .taxNameSnapshot(definition.name())
                     .taxRateSnapshot(rate)
                     .taxBaseSnapshot(baseGross)
-                    .taxAmountSnapshot(amount)
+                    .taxAmountSnapshot(calculateTaxFromGross(baseGross, rate))
                     .createdBy(userId)
                     .build());
         }
@@ -398,28 +795,18 @@ public class OrderUseCase implements OrderServicePort {
             BigDecimal baseGross = defaulted(item.getSubtotalGrossSnapshot());
             for (OrderTaxDefinition definition : taxContext.definitions()) {
                 BigDecimal rate = normalizeRate(definition.rate());
-                BigDecimal amount = calculateTaxFromGross(baseGross, rate);
                 taxes.add(OrderItemTaxDomain.builder()
                         .orderItemId(item.getId())
                         .taxId(definition.id())
                         .taxNameSnapshot(definition.name())
                         .taxRateSnapshot(rate)
                         .taxBaseSnapshot(baseGross)
-                        .taxAmountSnapshot(amount)
+                        .taxAmountSnapshot(calculateTaxFromGross(baseGross, rate))
                         .createdBy(userId)
                         .build());
             }
         }
         return taxes;
-    }
-
-    private void applyItemTaxes(List<OrderItemDomain> items, List<OrderItemTaxDomain> taxes) {
-        for (OrderItemDomain item : items) {
-            List<OrderItemTaxDomain> itemTaxes = taxes.stream()
-                    .filter(tax -> item.getId() != null && item.getId().equals(tax.getOrderItemId()))
-                    .toList();
-            item.setTaxes(itemTaxes);
-        }
     }
 
     private BigDecimal normalizeQuantity(BigDecimal quantity) {
@@ -440,9 +827,55 @@ public class OrderUseCase implements OrderServicePort {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    private void assignFriendlyCodes(OrderDomain order, RestaurantDomain restaurant) {
+        ZoneId zoneId = resolveRestaurantZoneId(restaurant);
+        LocalDate businessDate = LocalDate.now(zoneId);
+        int dailySequence = orderPersistence.nextDailySequence(order.getRestaurantId(), businessDate);
+        order.setBusinessDate(businessDate);
+        order.setDailySequence(dailySequence);
+        order.setPublicCode(generateUniquePublicCode(order.getRestaurantId()));
+    }
+
+    private String generateUniquePublicCode(UUID restaurantId) {
+        for (int attempt = 0; attempt < PUBLIC_CODE_MAX_ATTEMPTS; attempt++) {
+            String code = randomPublicCode();
+            if (!orderPersistence.existsPublicCode(restaurantId, code)) {
+                return code;
+            }
+        }
+        throw new IllegalStateException("Could not generate a unique public order code.");
+    }
+
+    private String randomPublicCode() {
+        StringBuilder code = new StringBuilder(PUBLIC_CODE_LENGTH);
+        for (int index = 0; index < PUBLIC_CODE_LENGTH; index++) {
+            code.append(PUBLIC_CODE_ALPHABET.charAt(PUBLIC_CODE_RANDOM.nextInt(PUBLIC_CODE_ALPHABET.length())));
+        }
+        return code.toString();
+    }
+
+    private ZoneId resolveRestaurantZoneId(RestaurantDomain restaurant) {
+        String timeZone = restaurant.getSettings() == null ? null : restaurant.getSettings().timeZone();
+        if (timeZone == null || timeZone.isBlank()) {
+            return ZoneId.of(DEFAULT_TIME_ZONE);
+        }
+        try {
+            return ZoneId.of(timeZone);
+        } catch (DateTimeException exception) {
+            throw new IllegalArgumentException("Invalid restaurant time zone: " + timeZone);
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     private record TaxContext(List<OrderTaxDefinition> definitions, BigDecimal rate) {
     }
 
     private record Totals(BigDecimal subtotalGross, BigDecimal taxAmount, BigDecimal totalGross) {
+    }
+
+    private record ProductReservationSource(UUID productId, BigDecimal multiplier) {
     }
 }

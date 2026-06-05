@@ -18,13 +18,16 @@ import java.util.UUID;
 public class OrderItemDomain {
     private UUID id;
     private UUID orderId;
+    private OrderLineType lineType;
     private UUID itemId;
+    private UUID templateId;
     private UUID submenuNodeId;
     private String itemNameSnapshot;
     private BigDecimal unitPriceSnapshot;
     private BigDecimal theoreticalCostSnapshot;
     private BigDecimal quantity;
     private BigDecimal subtotalGrossSnapshot;
+    private String notes;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
     private UUID createdBy;
@@ -32,4 +35,7 @@ public class OrderItemDomain {
 
     @Builder.Default
     private List<OrderItemTaxDomain> taxes = new ArrayList<>();
+
+    @Builder.Default
+    private List<OrderItemTemplateSlotDomain> templateSlots = new ArrayList<>();
 }

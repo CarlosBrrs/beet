@@ -62,6 +62,10 @@ export default function RestaurantDashboard() {
                 </Card>
             </div>
 
+            <div className="border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                Pendiente no bloqueante: permitir editar la zona horaria del restaurante despues de crearlo. Afecta numeracion diaria de ordenes, cajas, cortes y reportes.
+            </div>
+
             <CatalogRoadmapNote />
         </div>
     )
