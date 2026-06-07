@@ -11,6 +11,7 @@ public record UpdateItemRequest(
         BigDecimal salePrice,
         BigDecimal yieldQty,
         UUID yieldUnitId,
+        Integer sellableUnitsPerBatch,
         // For flat products only — user-defined cost
         BigDecimal userDefinedCost,
         Boolean isAvailableAsTemplateOption,

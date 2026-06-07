@@ -13,18 +13,14 @@ import java.util.UUID;
 @Setter
 @Builder
 @AllArgsConstructor
-public class InventoryReservationDomain {
+public class OrderItemIngredientRequirementDomain {
     private UUID id;
     private UUID restaurantId;
     private UUID orderId;
     private UUID orderItemId;
-    private UUID ingredientStockId;
     private UUID masterIngredientId;
-    private BigDecimal quantityBase;
+    private String ingredientNameSnapshot;
+    private BigDecimal quantityBasePerSaleUnit;
     private BigDecimal unitCostSnapshot;
-    private InventoryReservationStatus status;
     private OffsetDateTime createdAt;
-    private OffsetDateTime updatedAt;
-    private UUID createdBy;
-    private UUID updatedBy;
 }

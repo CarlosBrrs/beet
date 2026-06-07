@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm, useFieldArray, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
@@ -116,9 +116,13 @@ const productSchema = z.object({
     lines: z.array(recipeLineSchema).optional(),
     yieldQty: z.number().positive().optional(),
     yieldUnitId: z.string().optional(),
+    sellableUnitsPerBatch: z.number().int().positive().optional(),
 }).superRefine((data, ctx) => {
     if (data.isInventoryTracked && (!data.lines || data.lines.length === 0)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La receta debe tener al menos un elemento", path: ["lines"] })
+    }
+    if (data.isInventoryTracked && !data.sellableUnitsPerBatch) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Define cuántas porciones produce el lote", path: ["sellableUnitsPerBatch"] })
     }
 })
 
@@ -171,6 +175,7 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
             isAvailableAsTemplateOption: forceAvailableAsTemplateOption,
             userDefinedCost: "",
             lines: [],
+            sellableUnitsPerBatch: 1,
         },
     })
 
@@ -185,6 +190,7 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
                 userDefinedCost: initialProduct.theoreticalCost?.toString() || "",
                 yieldQty: initialProduct.yieldQty || undefined,
                 yieldUnitId: initialProduct.yieldUnitId || undefined,
+                sellableUnitsPerBatch: initialProduct.sellableUnitsPerBatch || 1,
                 lines: initialProduct.recipeLines?.map(line => ({
                     source: line.source,
                     masterIngredientId: line.masterIngredientId || undefined,
@@ -198,8 +204,15 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
 
     const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" })
 
-    const watchIsTracked = form.watch("isInventoryTracked")
-    const watchLines = form.watch("lines")
+    const watchIsTracked = useWatch({ control: form.control, name: "isInventoryTracked" })
+    const watchLines = useWatch({ control: form.control, name: "lines" })
+    const watchYieldQty = useWatch({ control: form.control, name: "yieldQty" })
+    const watchYieldUnitId = useWatch({ control: form.control, name: "yieldUnitId" })
+    const watchSellableUnits = useWatch({ control: form.control, name: "sellableUnitsPerBatch" })
+    const selectedYieldUnit = units.find(unit => unit.id === watchYieldUnitId)
+    const derivedPortionSize = watchYieldQty && watchSellableUnits
+        ? watchYieldQty / watchSellableUnits
+        : null
     const isPending = createSubmenuProduct.isPending || updateSubmenuProduct.isPending
         || createCatalogProduct.isPending || updateCatalogProduct.isPending
 
@@ -256,11 +269,13 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
                 payload.yieldQty = values.yieldQty
                 payload.yieldUnitId = values.yieldUnitId
             }
+            payload.sellableUnitsPerBatch = values.sellableUnitsPerBatch
         } else {
             // Flat products require a default yield unit in the database
             const pcsUnit = units.find(u => u.abbreviation === "pcs")
             payload.yieldQty = 1
             payload.yieldUnitId = pcsUnit?.id
+            payload.sellableUnitsPerBatch = 1
             payload.userDefinedCost = values.userDefinedCost ? parsePriceInput(values.userDefinedCost) : 0
         }
 
@@ -432,13 +447,13 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
                             </Button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg border">
+                        <div className="grid gap-4 border bg-muted/30 p-4 md:grid-cols-3">
                             <FormField
                                 control={form.control}
                                 name="yieldQty"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Cantidad producida por la receta</FormLabel>
+                                        <FormLabel>Rendimiento físico del lote</FormLabel>
                                         <FormControl>
                                             <Input
                                                 type="number"
@@ -449,7 +464,7 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
                                             />
                                         </FormControl>
                                         <FormDescription>
-                                            Total vendible producido. Ej.: 1 pcs de hamburguesa o 50 pcs de empanadas.
+                                            Cantidad física total obtenida. Ej.: 1.500 g de carne preparada.
                                         </FormDescription>
                                         <FormMessage />
                                     </FormItem>
@@ -460,7 +475,7 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
                                 name="yieldUnitId"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Unidad producida</FormLabel>
+                                        <FormLabel>Unidad física</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl>
                                                 <SelectTrigger>
@@ -477,6 +492,43 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
                                     </FormItem>
                                 )}
                             />
+                            <FormField
+                                control={form.control}
+                                name="sellableUnitsPerBatch"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Porciones vendibles</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                step={1}
+                                                {...field}
+                                                value={field.value ?? ""}
+                                                onChange={event => {
+                                                    const value = event.target.value
+                                                    field.onChange(value === "" ? undefined : Number(value))
+                                                }}
+                                            />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Unidades enteras que este lote permite vender.
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <div className="md:col-span-3 border-t pt-3 text-sm">
+                                <span className="text-muted-foreground">Tamaño aproximado por porción: </span>
+                                <span className="font-medium">
+                                    {derivedPortionSize !== null
+                                        ? `${derivedPortionSize.toLocaleString("es-CO", { maximumFractionDigits: 6 })} ${selectedYieldUnit?.abbreviation ?? ""}`
+                                        : "Completa rendimiento y porciones"}
+                                </span>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Este valor se deriva del rendimiento físico dividido entre las porciones; no se almacena por separado.
+                                </p>
+                            </div>
                         </div>
 
                         {fields.length === 0 ? (
@@ -489,7 +541,7 @@ export function ProductForm({ menuId, submenuId, productId, forceAvailableAsTemp
                         ) : (
                             <div className="space-y-2">
                                 {fields.map((field, index) => {
-                                    const source = form.watch(`lines.${index}.source`)
+                                    const source = watchLines?.[index]?.source
                                     const unitType = getUnitTypeForLine(index)
                                     const availableUnits = unitType ? units.filter(u => u.type === unitType) : units
 

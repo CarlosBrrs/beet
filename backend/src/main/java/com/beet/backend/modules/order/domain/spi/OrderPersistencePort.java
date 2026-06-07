@@ -1,11 +1,13 @@
 package com.beet.backend.modules.order.domain.spi;
 
 import com.beet.backend.modules.order.domain.model.InventoryReservationDomain;
+import com.beet.backend.modules.order.domain.model.IngredientStockAvailabilityDomain;
 import com.beet.backend.modules.order.domain.model.KitchenTicketDomain;
 import com.beet.backend.modules.order.domain.model.KitchenTicketStatus;
 import com.beet.backend.modules.order.domain.model.OrderDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTaxDomain;
+import com.beet.backend.modules.order.domain.model.OrderItemIngredientRequirementDomain;
 import com.beet.backend.modules.order.domain.model.OrderSearchCriteria;
 import com.beet.backend.modules.order.domain.model.OrderTaxDomain;
 import com.beet.backend.modules.order.domain.model.PaymentDomain;
@@ -32,6 +34,13 @@ public interface OrderPersistencePort {
     OrderItemDomain saveItem(OrderItemDomain item);
 
     void saveTemplateSnapshots(OrderItemDomain item);
+
+    void saveIngredientRequirements(OrderItemDomain item);
+
+    List<OrderItemIngredientRequirementDomain> findIngredientRequirements(UUID orderItemId);
+
+    Optional<IngredientStockAvailabilityDomain> findIngredientStockAvailability(
+            UUID restaurantId, UUID masterIngredientId);
 
     void updateItemQuantity(UUID orderItemId, BigDecimal quantity, BigDecimal subtotalGrossSnapshot, UUID updatedBy);
 

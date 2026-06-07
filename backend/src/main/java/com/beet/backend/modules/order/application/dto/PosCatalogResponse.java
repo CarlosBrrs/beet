@@ -19,6 +19,7 @@ public record PosCatalogResponse(
         BigDecimal price,
         boolean available,
         boolean lowStock,
+        Integer maxAvailableUnits,
         String unavailableReason,
         int sortOrder,
         List<String> insufficientIngredients,
@@ -42,6 +43,7 @@ public record PosCatalogResponse(
             boolean isDefault,
             boolean available,
             boolean lowStock,
+            Integer maxAvailableUnits,
             String unavailableReason,
             int sortOrder,
             List<String> insufficientIngredients) {

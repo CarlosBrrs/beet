@@ -50,7 +50,7 @@ export function ProductHubDetail({ productId }: ProductHubDetailProps) {
     }
 
     const margin =
-        product.salePrice && product.theoreticalCost && product.salePrice > 0
+        product.costComplete && product.salePrice && product.theoreticalCost !== null && product.salePrice > 0
             ? (((product.salePrice - product.theoreticalCost) / product.salePrice) * 100).toFixed(1)
             : null
 
@@ -72,7 +72,7 @@ export function ProductHubDetail({ productId }: ProductHubDetailProps) {
             </div>
 
             {/* Key Metrics */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground mb-1">Precio de Venta</p>
                     <p className="text-lg font-semibold">{formatCurrency(product.salePrice || 0)}</p>
@@ -80,7 +80,7 @@ export function ProductHubDetail({ productId }: ProductHubDetailProps) {
                 <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground mb-1">Costo Teórico</p>
                     <p className="text-lg font-semibold">
-                        {product.theoreticalCost ? formatCurrency(product.theoreticalCost) : "—"}
+                        {product.theoreticalCost !== null ? formatCurrency(product.theoreticalCost) : "—"}
                     </p>
                 </div>
                 <div className="rounded-lg border bg-muted/20 p-3">
@@ -89,7 +89,34 @@ export function ProductHubDetail({ productId }: ProductHubDetailProps) {
                         {margin ? `${margin}%` : "—"}
                     </p>
                 </div>
+                <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Rendimiento</p>
+                    <p className="text-lg font-semibold">{product.sellableUnitsPerBatch ?? 1} porciones</p>
+                    {product.portionSize !== null && (
+                        <p className="text-xs text-muted-foreground">
+                            {product.portionSize} {product.portionUnitAbbreviation} por porción
+                        </p>
+                    )}
+                </div>
             </div>
+
+            {product.isInventoryTracked && (
+                <div className="border p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>Costo total del lote</span>
+                        <strong>
+                            {product.batchTheoreticalCost !== null
+                                ? formatCurrency(product.batchTheoreticalCost)
+                                : "Costo incompleto"}
+                        </strong>
+                    </div>
+                    {!product.costComplete && (
+                        <p className="mt-2 text-xs text-destructive">
+                            Sin costo activo: {product.missingCostIngredients.join(", ")}. El margen no se calcula.
+                        </p>
+                    )}
+                </div>
+            )}
 
             {/* Recipe Lines */}
             <div className="pt-2 border-t">
@@ -107,15 +134,17 @@ export function ProductHubDetail({ productId }: ProductHubDetailProps) {
                             <tbody>
                                 {product.recipeLines.map((line) => (
                                     <tr key={line.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                                        <td className="p-3 align-middle font-mono text-xs">
-                                            {line.source === "INGREDIENT" ? line.masterIngredientId : line.childItemId}
+                                        <td className="p-3 align-middle font-medium">
+                                            {line.sourceName ?? "Elemento no disponible"}
                                         </td>
                                         <td className="p-3 align-middle">
                                             <Badge variant="outline" className="text-xs font-normal">
                                                 {line.source === "INGREDIENT" ? "Insumo" : "Preparación"}
                                             </Badge>
                                         </td>
-                                        <td className="p-3 align-middle text-right">{line.quantity}</td>
+                                        <td className="p-3 align-middle text-right">
+                                            {line.quantity} {line.unitAbbreviation}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

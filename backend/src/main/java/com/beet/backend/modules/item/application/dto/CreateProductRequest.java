@@ -34,5 +34,6 @@ public record CreateProductRequest(
         // Yield — relevant for tracked products; defaults to 1 pc
         @Positive(message = "Yield quantity must be positive") BigDecimal yieldQty,
         UUID yieldUnitId,
+        @Positive(message = "Sellable units per batch must be positive") Integer sellableUnitsPerBatch,
         Boolean isAvailableAsTemplateOption) {
 }

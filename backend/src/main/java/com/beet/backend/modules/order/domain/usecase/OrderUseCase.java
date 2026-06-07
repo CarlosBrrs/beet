@@ -1,8 +1,11 @@
 package com.beet.backend.modules.order.domain.usecase;
 
 import com.beet.backend.modules.item.domain.exception.ItemNotFoundException;
+import com.beet.backend.modules.item.domain.api.RecipeCalculationServicePort;
 import com.beet.backend.modules.item.domain.model.ItemClass;
 import com.beet.backend.modules.item.domain.model.ItemDomain;
+import com.beet.backend.modules.item.domain.model.RecipeCalculationResult;
+import com.beet.backend.modules.item.domain.model.RecipeIngredientRequirement;
 import com.beet.backend.modules.item.domain.spi.ItemPersistencePort;
 import com.beet.backend.modules.menu.domain.model.SubmenuNodeDomain;
 import com.beet.backend.modules.menu.domain.model.SubmenuNodeType;
@@ -13,12 +16,14 @@ import com.beet.backend.modules.order.domain.exception.OrderNotFoundException;
 import com.beet.backend.modules.order.domain.model.DeliveryStatus;
 import com.beet.backend.modules.order.domain.model.InventoryReservationDomain;
 import com.beet.backend.modules.order.domain.model.InventoryReservationStatus;
+import com.beet.backend.modules.order.domain.model.IngredientStockAvailabilityDomain;
 import com.beet.backend.modules.order.domain.model.KitchenStatus;
 import com.beet.backend.modules.order.domain.model.KitchenTicketDomain;
 import com.beet.backend.modules.order.domain.model.KitchenTicketLineDomain;
 import com.beet.backend.modules.order.domain.model.KitchenTicketStatus;
 import com.beet.backend.modules.order.domain.model.OrderDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemDomain;
+import com.beet.backend.modules.order.domain.model.OrderItemIngredientRequirementDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTaxDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTemplateOptionDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTemplateSlotDomain;
@@ -57,7 +62,10 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -80,6 +88,7 @@ public class OrderUseCase implements OrderServicePort {
     private final OrderTaxQueryPort orderTaxQuery;
     private final RestaurantPersistencePort restaurantPersistence;
     private final ItemPersistencePort itemPersistence;
+    private final RecipeCalculationServicePort recipeCalculationService;
     private final TemplatePersistencePort templatePersistence;
     private final SubmenuNodeQueryPort submenuNodeQuery;
     private final OrderTableGateway tableGateway;
@@ -195,6 +204,8 @@ public class OrderUseCase implements OrderServicePort {
         OrderItemDomain prepared = buildItem(item, restaurantId, userId);
         prepared.setOrderId(orderId);
         OrderItemDomain saved = orderPersistence.saveItem(prepared);
+        saved.setIngredientRequirements(prepared.getIngredientRequirements());
+        orderPersistence.saveIngredientRequirements(saved);
         orderPersistence.saveTemplateSnapshots(saved);
 
         List<OrderItemDomain> items = new ArrayList<>(order.getItems());
@@ -218,9 +229,7 @@ public class OrderUseCase implements OrderServicePort {
         if (order.getOrderStatus() != OrderStatus.DRAFT) {
             throw new IllegalArgumentException("Quantity can only be edited while the order is draft.");
         }
-        if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Quantity must be greater than zero.");
-        }
+        quantity = normalizeQuantity(quantity);
         OrderItemDomain target = findItem(order, orderItemId);
         BigDecimal subtotal = defaulted(target.getUnitPriceSnapshot()).multiply(quantity)
                 .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
@@ -265,8 +274,105 @@ public class OrderUseCase implements OrderServicePort {
     @Override
     public PageResponse<PosCatalogEntryDomain> findPosCatalog(UUID restaurantId, int page, int size, String search,
             UUID menuId, UUID submenuId, String availability, String referenceType, String sort) {
-        return orderPersistence.findPosCatalog(
+        PageResponse<PosCatalogEntryDomain> result = orderPersistence.findPosCatalog(
                 restaurantId, page, size, search, menuId, submenuId, availability, referenceType, sort);
+        result.content().forEach(entry -> enrichAvailability(restaurantId, entry));
+        return result;
+    }
+
+    private void enrichAvailability(UUID restaurantId, PosCatalogEntryDomain entry) {
+        if (entry.getReferenceType() == com.beet.backend.modules.order.domain.model.CatalogReferenceType.PRODUCT) {
+            ProductAvailability availability = calculateProductAvailability(restaurantId, entry.getReferenceId());
+            applyAvailability(entry, availability);
+            return;
+        }
+
+        boolean templateAvailable = entry.isAvailable();
+        boolean lowStock = false;
+        Integer templateMax = null;
+        for (var slot : entry.getSlots()) {
+            int availableCapacity = 0;
+            int slotUnitCapacity = 0;
+            for (var option : slot.getOptions()) {
+                ProductAvailability optionAvailability =
+                        calculateProductAvailability(restaurantId, option.getItemId());
+                option.setAvailable(option.isAvailable() && optionAvailability.available());
+                option.setLowStock(optionAvailability.lowStock());
+                option.setMaxAvailableUnits(optionAvailability.maxAvailableUnits());
+                option.setInsufficientIngredients(optionAvailability.insufficientIngredients());
+                if (!option.isAvailable()) {
+                    option.setUnavailableReason(optionAvailability.reason());
+                }
+                lowStock = lowStock || option.isLowStock();
+                if (option.isAvailable()) {
+                    int capacity = option.getMaxAvailableUnits() == null
+                            ? option.getMaxQuantity()
+                            : Math.min(option.getMaxQuantity(), option.getMaxAvailableUnits());
+                    availableCapacity += capacity;
+                    slotUnitCapacity += capacity;
+                }
+            }
+            if (slot.getMinSelection() > 0) {
+                if (availableCapacity < slot.getMinSelection()) {
+                    templateAvailable = false;
+                } else {
+                    int slotTemplates = slotUnitCapacity / slot.getMinSelection();
+                    templateMax = templateMax == null ? slotTemplates : Math.min(templateMax, slotTemplates);
+                }
+            }
+        }
+        entry.setAvailable(templateAvailable);
+        entry.setLowStock(lowStock);
+        entry.setMaxAvailableUnits(templateMax);
+        if (!templateAvailable && entry.getUnavailableReason() == null) {
+            entry.setUnavailableReason("No hay opciones suficientes para completar los slots obligatorios");
+        }
+    }
+
+    private void applyAvailability(PosCatalogEntryDomain entry, ProductAvailability availability) {
+        entry.setAvailable(entry.isAvailable() && availability.available());
+        entry.setLowStock(availability.lowStock());
+        entry.setMaxAvailableUnits(availability.maxAvailableUnits());
+        entry.setInsufficientIngredients(availability.insufficientIngredients());
+        if (!entry.isAvailable() && entry.getUnavailableReason() == null) {
+            entry.setUnavailableReason(availability.reason());
+        }
+    }
+
+    private ProductAvailability calculateProductAvailability(UUID restaurantId, UUID productId) {
+        ItemDomain product = loadProduct(restaurantId, productId);
+        if (!product.isInventoryTracked()) {
+            return new ProductAvailability(true, false, null, null, List.of());
+        }
+        RecipeCalculationResult calculation = recipeCalculationService.calculate(restaurantId, productId);
+        int maxAvailable = Integer.MAX_VALUE;
+        boolean lowStock = false;
+        List<String> insufficient = new ArrayList<>();
+        for (RecipeIngredientRequirement requirement :
+                calculation.ingredientRequirementsPerSellableUnit()) {
+            Optional<IngredientStockAvailabilityDomain> stock =
+                    orderPersistence.findIngredientStockAvailability(
+                            restaurantId, requirement.masterIngredientId());
+            if (stock.isEmpty()) {
+                insufficient.add(requirement.ingredientName());
+                maxAvailable = 0;
+                continue;
+            }
+            IngredientStockAvailabilityDomain snapshot = stock.get();
+            lowStock = lowStock || snapshot.currentStock().compareTo(snapshot.minStock()) <= 0;
+            int ingredientMax = snapshot.availableStock()
+                    .divideToIntegralValue(requirement.quantityBase())
+                    .max(BigDecimal.ZERO)
+                    .intValue();
+            maxAvailable = Math.min(maxAvailable, ingredientMax);
+            if (ingredientMax < 1) {
+                insufficient.add(requirement.ingredientName());
+            }
+        }
+        Integer max = maxAvailable == Integer.MAX_VALUE ? null : maxAvailable;
+        boolean available = max == null || max > 0;
+        String reason = available ? null : "Inventario insuficiente";
+        return new ProductAvailability(available, lowStock, max, reason, List.copyOf(insufficient));
     }
 
     @Override
@@ -389,6 +495,8 @@ public class OrderUseCase implements OrderServicePort {
             item.setCreatedBy(userId);
             item.setUpdatedBy(userId);
             OrderItemDomain saved = orderPersistence.saveItem(item);
+            saved.setIngredientRequirements(item.getIngredientRequirements());
+            orderPersistence.saveIngredientRequirements(saved);
             saved.setTemplateSlots(item.getTemplateSlots());
             orderPersistence.saveTemplateSnapshots(saved);
             savedItems.add(saved);
@@ -434,16 +542,24 @@ public class OrderUseCase implements OrderServicePort {
         if (unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Published product must have a sale price.");
         }
+        RecipeCalculationResult calculation = sourceItem.isInventoryTracked()
+                ? recipeCalculationService.calculate(restaurantId, sourceItem.getId())
+                : null;
         return OrderItemDomain.builder()
                 .lineType(OrderLineType.PRODUCT)
                 .itemId(sourceItem.getId())
                 .submenuNodeId(item.getSubmenuNodeId())
                 .itemNameSnapshot(sourceItem.getName())
                 .unitPriceSnapshot(unitPrice)
-                .theoreticalCostSnapshot(defaulted(sourceItem.getTheoreticalCost()))
+                .theoreticalCostSnapshot(calculation != null
+                        ? calculation.costPerSellableUnit()
+                        : sourceItem.getTheoreticalCost())
                 .quantity(quantity)
                 .subtotalGrossSnapshot(unitPrice.multiply(quantity).setScale(MONEY_SCALE, RoundingMode.HALF_UP))
                 .notes(item.getNotes())
+                .ingredientRequirements(calculation == null
+                        ? List.of()
+                        : toOrderRequirements(restaurantId, calculation.ingredientRequirementsPerSellableUnit()))
                 .createdBy(userId)
                 .updatedBy(userId)
                 .build();
@@ -469,20 +585,20 @@ public class OrderUseCase implements OrderServicePort {
         if (unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Template item must have a positive price.");
         }
+        List<OrderItemIngredientRequirementDomain> requirements =
+                buildTemplateRequirements(restaurantId, slotSnapshots);
         return OrderItemDomain.builder()
                 .lineType(OrderLineType.TEMPLATE)
                 .templateId(item.getTemplateId())
                 .submenuNodeId(item.getSubmenuNodeId())
                 .itemNameSnapshot(template.getName())
                 .unitPriceSnapshot(unitPrice)
-                .theoreticalCostSnapshot(slotSnapshots.stream()
-                        .flatMap(slot -> slot.getOptions().stream())
-                        .map(option -> defaulted(option.getTheoreticalCostSnapshot()).multiply(normalizeQuantity(option.getQuantity())))
-                        .reduce(BigDecimal.ZERO, BigDecimal::add))
+                .theoreticalCostSnapshot(calculateTemplateCost(slotSnapshots))
                 .quantity(quantity)
                 .subtotalGrossSnapshot(unitPrice.multiply(quantity).setScale(MONEY_SCALE, RoundingMode.HALF_UP))
                 .notes(item.getNotes())
                 .templateSlots(slotSnapshots)
+                .ingredientRequirements(requirements)
                 .createdBy(userId)
                 .updatedBy(userId)
                 .build();
@@ -522,7 +638,10 @@ public class OrderUseCase implements OrderServicePort {
                             .itemNameSnapshot(product.getName())
                             .quantity(selectedQuantity)
                             .surchargeSnapshot(defaulted(sourceOption.getSurcharge()))
-                            .theoreticalCostSnapshot(defaulted(product.getTheoreticalCost()))
+                            .theoreticalCostSnapshot(product.isInventoryTracked()
+                                    ? recipeCalculationService.calculate(
+                                            template.getRestaurantId(), product.getId()).costPerSellableUnit()
+                                    : product.getTheoreticalCost())
                             .build());
                 }
             }
@@ -587,47 +706,34 @@ public class OrderUseCase implements OrderServicePort {
         for (OrderItemDomain item : order.getItems()) {
             reservations.addAll(buildReservationsForItem(order, item, userId));
         }
+        reservations.sort(Comparator
+                .comparing((InventoryReservationDomain reservation) ->
+                        reservation.getMasterIngredientId().toString())
+                .thenComparing(reservation -> reservation.getOrderItemId().toString()));
         return reservations;
     }
 
     private List<InventoryReservationDomain> buildReservationsForItem(OrderDomain order, OrderItemDomain item, UUID userId) {
-        List<InventoryReservationDomain> reservations = new ArrayList<>();
-        List<ProductReservationSource> productSources = new ArrayList<>();
-        if (item.getLineType() == OrderLineType.PRODUCT) {
-            productSources.add(new ProductReservationSource(item.getItemId(), BigDecimal.ONE));
-        } else {
-            item.getTemplateSlots().forEach(slot -> slot.getOptions()
-                    .forEach(option -> productSources.add(new ProductReservationSource(
-                            option.getItemId(), normalizeQuantity(option.getQuantity())))));
-        }
-        for (ProductReservationSource source : productSources) {
-            ItemDomain product = loadProduct(order.getRestaurantId(), source.productId());
-            if (!product.isInventoryTracked() || product.getRecipeLines().isEmpty()) {
-                continue;
-            }
-            product.getRecipeLines().forEach(line -> {
-                if (line.getMasterIngredientId() == null) {
-                    return;
-                }
-                BigDecimal factor = itemPersistence.getUnitFactorToBase(line.getUnitId());
-                BigDecimal quantity = line.getQuantity()
-                        .multiply(factor)
-                        .multiply(defaulted(item.getQuantity()))
-                        .multiply(source.multiplier())
-                        .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-                reservations.add(InventoryReservationDomain.builder()
+        List<OrderItemIngredientRequirementDomain> requirements =
+                item.getIngredientRequirements() == null || item.getIngredientRequirements().isEmpty()
+                        ? orderPersistence.findIngredientRequirements(item.getId())
+                        : item.getIngredientRequirements();
+        return requirements.stream()
+                .sorted(Comparator.comparing(requirement -> requirement.getMasterIngredientId().toString()))
+                .map(requirement -> InventoryReservationDomain.builder()
                         .restaurantId(order.getRestaurantId())
                         .orderId(order.getId())
                         .orderItemId(item.getId())
-                        .masterIngredientId(line.getMasterIngredientId())
-                        .quantityBase(quantity)
+                        .masterIngredientId(requirement.getMasterIngredientId())
+                        .quantityBase(requirement.getQuantityBasePerSaleUnit()
+                                .multiply(item.getQuantity())
+                                .setScale(6, RoundingMode.HALF_UP))
+                        .unitCostSnapshot(requirement.getUnitCostSnapshot())
                         .status(InventoryReservationStatus.ACTIVE)
                         .createdBy(userId)
                         .updatedBy(userId)
-                        .build());
-            });
-        }
-        return reservations;
+                        .build())
+                .toList();
     }
 
     private KitchenTicketDomain createKitchenTicket(OrderDomain order, UUID userId) {
@@ -809,11 +915,82 @@ public class OrderUseCase implements OrderServicePort {
         return taxes;
     }
 
+    private List<OrderItemIngredientRequirementDomain> toOrderRequirements(
+            UUID restaurantId, List<RecipeIngredientRequirement> requirements) {
+        return requirements.stream()
+                .map(requirement -> OrderItemIngredientRequirementDomain.builder()
+                        .restaurantId(restaurantId)
+                        .masterIngredientId(requirement.masterIngredientId())
+                        .ingredientNameSnapshot(requirement.ingredientName())
+                        .quantityBasePerSaleUnit(requirement.quantityBase())
+                        .unitCostSnapshot(requirement.unitCost())
+                        .build())
+                .toList();
+    }
+
+    private List<OrderItemIngredientRequirementDomain> buildTemplateRequirements(
+            UUID restaurantId, List<OrderItemTemplateSlotDomain> slots) {
+        Map<UUID, OrderItemIngredientRequirementDomain> aggregated = new LinkedHashMap<>();
+        for (OrderItemTemplateOptionDomain option : slots.stream()
+                .flatMap(slot -> slot.getOptions().stream())
+                .toList()) {
+            ItemDomain product = loadProduct(restaurantId, option.getItemId());
+            if (!product.isInventoryTracked()) {
+                continue;
+            }
+            RecipeCalculationResult calculation = recipeCalculationService.calculate(restaurantId, option.getItemId());
+            BigDecimal selectedQuantity = normalizeQuantity(option.getQuantity());
+            for (RecipeIngredientRequirement requirement :
+                    calculation.ingredientRequirementsPerSellableUnit()) {
+                BigDecimal quantity = requirement.quantityBase()
+                        .multiply(selectedQuantity)
+                        .setScale(6, RoundingMode.HALF_UP);
+                aggregated.compute(requirement.masterIngredientId(), (id, current) -> {
+                    if (current == null) {
+                        return OrderItemIngredientRequirementDomain.builder()
+                                .restaurantId(restaurantId)
+                                .masterIngredientId(id)
+                                .ingredientNameSnapshot(requirement.ingredientName())
+                                .quantityBasePerSaleUnit(quantity)
+                                .unitCostSnapshot(requirement.unitCost())
+                                .build();
+                    }
+                    current.setQuantityBasePerSaleUnit(
+                            current.getQuantityBasePerSaleUnit().add(quantity).setScale(6, RoundingMode.HALF_UP));
+                    if (requirement.unitCost() == null) {
+                        current.setUnitCostSnapshot(null);
+                    }
+                    return current;
+                });
+            }
+        }
+        return aggregated.values().stream()
+                .sorted(Comparator.comparing(OrderItemIngredientRequirementDomain::getIngredientNameSnapshot))
+                .toList();
+    }
+
+    private BigDecimal calculateTemplateCost(List<OrderItemTemplateSlotDomain> slots) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (OrderItemTemplateOptionDomain option : slots.stream()
+                .flatMap(slot -> slot.getOptions().stream())
+                .toList()) {
+            if (option.getTheoreticalCostSnapshot() == null) {
+                return null;
+            }
+            total = total.add(option.getTheoreticalCostSnapshot().multiply(normalizeQuantity(option.getQuantity())));
+        }
+        return total.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+    }
+
     private BigDecimal normalizeQuantity(BigDecimal quantity) {
         if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than zero.");
         }
-        return quantity.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        try {
+            return new BigDecimal(quantity.toBigIntegerExact()).setScale(0);
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException("Products and template options require whole quantities.");
+        }
     }
 
     private BigDecimal normalizeRate(BigDecimal rate) {
@@ -876,6 +1053,12 @@ public class OrderUseCase implements OrderServicePort {
     private record Totals(BigDecimal subtotalGross, BigDecimal taxAmount, BigDecimal totalGross) {
     }
 
-    private record ProductReservationSource(UUID productId, BigDecimal multiplier) {
+    private record ProductAvailability(
+            boolean available,
+            boolean lowStock,
+            Integer maxAvailableUnits,
+            String reason,
+            List<String> insufficientIngredients) {
     }
+
 }

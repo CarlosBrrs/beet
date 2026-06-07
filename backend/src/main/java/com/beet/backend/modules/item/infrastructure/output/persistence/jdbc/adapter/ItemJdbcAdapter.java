@@ -5,6 +5,8 @@ import com.beet.backend.modules.item.domain.model.ItemDomain;
 import com.beet.backend.modules.item.domain.model.RecipeLineDomain;
 import com.beet.backend.modules.item.domain.model.RecipeLineSource;
 import com.beet.backend.modules.item.domain.model.ProductDependenciesDomain;
+import com.beet.backend.modules.item.domain.model.IngredientCostSource;
+import com.beet.backend.modules.item.domain.model.UnitConversion;
 import com.beet.backend.modules.item.domain.spi.ItemPersistencePort;
 import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import lombok.RequiredArgsConstructor;
@@ -36,10 +38,12 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
                 INSERT INTO items
                     (restaurant_id, class, name, description, is_inventory_tracked,
                      yield_qty, yield_unit_id, sale_price, theoretical_cost, is_active, is_available_as_template_option,
+                     sellable_units_per_batch,
                      created_by, updated_by)
                 VALUES
                     (:restaurantId, :class::item_class, :name, :description, :tracked,
                      :yieldQty, :yieldUnitId, :salePrice, :theoreticalCost, :isActive, :isTemplateOption,
+                     :sellableUnitsPerBatch,
                      :createdBy, :updatedBy)
                 RETURNING *
                 """;
@@ -55,6 +59,7 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
                 .param("theoreticalCost", item.getTheoreticalCost())
                 .param("isActive", item.isActive())
                 .param("isTemplateOption", item.isAvailableAsTemplateOption())
+                .param("sellableUnitsPerBatch", item.getSellableUnitsPerBatch())
                 .param("createdBy", item.getCreatedBy())
                 .param("updatedBy", item.getUpdatedBy())
                 .query(this::mapItem)
@@ -71,6 +76,7 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
                           yield_unit_id = :yieldUnitId,
                           sale_price = :salePrice,
                           theoretical_cost = :theoreticalCost,
+                          sellable_units_per_batch = :sellableUnitsPerBatch,
                           is_available_as_template_option = :isTemplateOption,
                           updated_at = NOW(),
                           updated_by = :updatedBy
@@ -85,6 +91,7 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
                 .param("yieldUnitId", item.getYieldUnitId())
                 .param("salePrice", item.getSalePrice())
                 .param("theoreticalCost", item.getTheoreticalCost())
+                .param("sellableUnitsPerBatch", item.getSellableUnitsPerBatch())
                 .param("isTemplateOption", item.isAvailableAsTemplateOption())
                 .param("updatedBy", item.getUpdatedBy())
                 .query(this::mapItem)
@@ -188,7 +195,18 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
 
     @Override
     public List<RecipeLineDomain> findRecipeLinesByParent(UUID parentItemId) {
-        return jdbcClient.sql("SELECT * FROM recipe_lines WHERE parent_item_id = :parentItemId ORDER BY sort_order ASC")
+        return jdbcClient.sql("""
+                SELECT rl.*,
+                       COALESCE(mi.name, child.name) AS source_name,
+                       u.name AS unit_name,
+                       u.abbreviation AS unit_abbreviation
+                  FROM recipe_lines rl
+             LEFT JOIN master_ingredients mi ON mi.id = rl.master_ingredient_id
+             LEFT JOIN items child ON child.id = rl.child_item_id
+                  JOIN units u ON u.id = rl.unit_id
+                 WHERE rl.parent_item_id = :parentItemId
+                 ORDER BY rl.sort_order ASC
+                """)
                 .param("parentItemId", parentItemId)
                 .query(this::mapRecipeLine)
                 .list();
@@ -229,18 +247,37 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
      * Returns factor_to_base for the given unit (1 if it's already a base unit).
      */
     @Override
-    public BigDecimal getUnitFactorToBase(UUID unitId) {
+    public UnitConversion getUnitConversion(UUID unitId) {
         String sql = """
-                   SELECT COALESCE(uc.factor, 1) AS factor
+                   SELECT u.id AS source_unit_id,
+                          base.id AS base_unit_id,
+                          base.abbreviation AS base_unit_abbreviation,
+                          CASE WHEN u.is_base THEN 1 ELSE uc.factor END AS factor
                      FROM units u
+                     JOIN units base ON base.type = u.type AND base.is_base = TRUE
                 LEFT JOIN unit_conversions uc ON uc.from_unit_id = u.id
+                                             AND uc.to_unit_id = base.id
                     WHERE u.id = :unitId
+                      AND (u.is_base = TRUE OR uc.factor IS NOT NULL)
                    """;
         return jdbcClient.sql(sql)
                 .param("unitId", unitId)
-                .query((rs, rn) -> rs.getBigDecimal("factor"))
+                .query((rs, rn) -> new UnitConversion(
+                        rs.getObject("source_unit_id", UUID.class),
+                        rs.getObject("base_unit_id", UUID.class),
+                        rs.getString("base_unit_abbreviation"),
+                        rs.getBigDecimal("factor")))
                 .optional()
-                .orElse(BigDecimal.ONE);
+                .orElseThrow(() -> new IllegalArgumentException("Unit not found: " + unitId));
+    }
+
+    @Override
+    public BigDecimal convertUnit(UUID sourceUnitId, UUID targetBaseUnitId, BigDecimal quantity) {
+        UnitConversion conversion = getUnitConversion(sourceUnitId);
+        if (!conversion.baseUnitId().equals(targetBaseUnitId)) {
+            throw new IllegalArgumentException("Incompatible recipe units.");
+        }
+        return quantity.multiply(conversion.factorToBase());
     }
 
     @Override
@@ -256,18 +293,73 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
      * set.
      */
     @Override
-    public BigDecimal getIngredientLastCostBase(UUID masterIngredientId) {
+    public Optional<IngredientCostSource> findIngredientCostSource(UUID masterIngredientId) {
         String sql = """
-                   SELECT COALESCE(si.last_cost_base, 0)
+                   SELECT mi.id,
+                          mi.name,
+                          mi.base_unit_id,
+                          u.abbreviation,
+                          si.last_cost_base
                      FROM master_ingredients mi
+                     JOIN units u ON u.id = mi.base_unit_id
                 LEFT JOIN supplier_items si ON mi.active_supplier_item_id = si.id
+                                           AND si.deleted_at IS NULL
                     WHERE mi.id = :id
+                      AND mi.deleted_at IS NULL
                    """;
         return jdbcClient.sql(sql)
                 .param("id", masterIngredientId)
-                .query((rs, rn) -> rs.getBigDecimal(1))
-                .optional()
-                .orElse(BigDecimal.ZERO);
+                .query((rs, rn) -> new IngredientCostSource(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("name"),
+                        rs.getObject("base_unit_id", UUID.class),
+                        rs.getString("abbreviation"),
+                        rs.getBigDecimal("last_cost_base")))
+                .optional();
+    }
+
+    @Override
+    public void updateTheoreticalCost(UUID itemId, BigDecimal theoreticalCost, UUID userId) {
+        jdbcClient.sql("""
+                UPDATE items
+                   SET theoretical_cost = :cost,
+                       updated_at = NOW(),
+                       updated_by = :userId
+                 WHERE id = :itemId
+                   AND deleted_at IS NULL
+                """)
+                .param("cost", theoreticalCost)
+                .param("userId", userId)
+                .param("itemId", itemId)
+                .update();
+    }
+
+    @Override
+    public List<ItemDomain> findParentsByChildItem(UUID childItemId) {
+        return jdbcClient.sql("""
+                SELECT DISTINCT i.*
+                  FROM items i
+                  JOIN recipe_lines rl ON rl.parent_item_id = i.id
+                 WHERE rl.child_item_id = :childItemId
+                   AND i.deleted_at IS NULL
+                """)
+                .param("childItemId", childItemId)
+                .query(this::mapItem)
+                .list();
+    }
+
+    @Override
+    public List<ItemDomain> findParentsByIngredient(UUID masterIngredientId) {
+        return jdbcClient.sql("""
+                SELECT DISTINCT i.*
+                  FROM items i
+                  JOIN recipe_lines rl ON rl.parent_item_id = i.id
+                 WHERE rl.master_ingredient_id = :ingredientId
+                   AND i.deleted_at IS NULL
+                """)
+                .param("ingredientId", masterIngredientId)
+                .query(this::mapItem)
+                .list();
     }
 
     // -----------------------------------------------------------------------
@@ -396,6 +488,7 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
                 .isInventoryTracked(rs.getBoolean("is_inventory_tracked"))
                 .yieldQty(rs.getBigDecimal("yield_qty"))
                 .yieldUnitId(rs.getObject("yield_unit_id", UUID.class))
+                .sellableUnitsPerBatch((Integer) rs.getObject("sellable_units_per_batch"))
                 .salePrice(rs.getBigDecimal("sale_price"))
                 .theoreticalCost(rs.getBigDecimal("theoretical_cost"))
                 .isActive(rs.getBoolean("is_active"))
@@ -417,7 +510,19 @@ public class ItemJdbcAdapter implements ItemPersistencePort {
                 .childItemId(rs.getObject("child_item_id", UUID.class))
                 .quantity(rs.getBigDecimal("quantity"))
                 .unitId(rs.getObject("unit_id", UUID.class))
+                .sourceName(hasColumn(rs, "source_name") ? rs.getString("source_name") : null)
+                .unitName(hasColumn(rs, "unit_name") ? rs.getString("unit_name") : null)
+                .unitAbbreviation(hasColumn(rs, "unit_abbreviation") ? rs.getString("unit_abbreviation") : null)
                 .sortOrder(rs.getInt("sort_order"))
                 .build();
+    }
+
+    private boolean hasColumn(ResultSet rs, String column) {
+        try {
+            rs.findColumn(column);
+            return true;
+        } catch (SQLException ignored) {
+            return false;
+        }
     }
 }

@@ -230,6 +230,74 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
     }
 
     @Override
+    public void saveIngredientRequirements(OrderItemDomain item) {
+        for (OrderItemIngredientRequirementDomain requirement :
+                item.getIngredientRequirements() == null
+                        ? List.<OrderItemIngredientRequirementDomain>of()
+                        : item.getIngredientRequirements()) {
+            UUID id = UUID.randomUUID();
+            requirement.setId(id);
+            requirement.setOrderId(item.getOrderId());
+            requirement.setOrderItemId(item.getId());
+            jdbc.sql("""
+                    INSERT INTO order_item_ingredient_requirements
+                        (id, restaurant_id, order_id, order_item_id, master_ingredient_id,
+                         ingredient_name_snapshot, quantity_base_per_sale_unit, unit_cost_snapshot)
+                    VALUES
+                        (:id, :restaurantId, :orderId, :orderItemId, :ingredientId,
+                         :ingredientName, :quantity, :unitCost)
+                    """)
+                    .param("id", id)
+                    .param("restaurantId", requirement.getRestaurantId())
+                    .param("orderId", item.getOrderId())
+                    .param("orderItemId", item.getId())
+                    .param("ingredientId", requirement.getMasterIngredientId())
+                    .param("ingredientName", requirement.getIngredientNameSnapshot())
+                    .param("quantity", requirement.getQuantityBasePerSaleUnit())
+                    .param("unitCost", requirement.getUnitCostSnapshot())
+                    .update();
+        }
+    }
+
+    @Override
+    public List<OrderItemIngredientRequirementDomain> findIngredientRequirements(UUID orderItemId) {
+        return jdbc.sql("""
+                SELECT *
+                  FROM order_item_ingredient_requirements
+                 WHERE order_item_id = :orderItemId
+                 ORDER BY ingredient_name_snapshot, master_ingredient_id
+                """)
+                .param("orderItemId", orderItemId)
+                .query(this::mapIngredientRequirement)
+                .list();
+    }
+
+    @Override
+    public Optional<IngredientStockAvailabilityDomain> findIngredientStockAvailability(
+            UUID restaurantId, UUID masterIngredientId) {
+        return jdbc.sql("""
+                SELECT s.master_ingredient_id,
+                       s.current_stock,
+                       s.min_stock,
+                       COALESCE(SUM(r.quantity_base) FILTER (WHERE r.status = 'ACTIVE'), 0) AS active_reserved
+                  FROM ingredient_stocks s
+             LEFT JOIN inventory_reservations r ON r.ingredient_stock_id = s.id
+                 WHERE s.restaurant_id = :restaurantId
+                   AND s.master_ingredient_id = :ingredientId
+                   AND s.deleted_at IS NULL
+                 GROUP BY s.master_ingredient_id, s.current_stock, s.min_stock
+                """)
+                .param("restaurantId", restaurantId)
+                .param("ingredientId", masterIngredientId)
+                .query((rs, rowNum) -> new IngredientStockAvailabilityDomain(
+                        rs.getObject("master_ingredient_id", UUID.class),
+                        rs.getBigDecimal("current_stock"),
+                        rs.getBigDecimal("min_stock"),
+                        rs.getBigDecimal("active_reserved")))
+                .optional();
+    }
+
+    @Override
     public void updateItemQuantity(UUID orderItemId, BigDecimal quantity, BigDecimal subtotalGrossSnapshot,
             UUID updatedBy) {
         jdbc.sql("""
@@ -324,6 +392,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .query(this::mapOrderItem)
                 .list();
         hydrateTemplateSnapshots(items);
+        items.forEach(item -> item.setIngredientRequirements(findIngredientRequirements(item.getId())));
         hydrateTaxes(orderId, domain, items);
         domain.setKitchenTickets(findTicketsByOrder(orderId));
         domain.setPayments(findPaymentsByOrder(orderId));
@@ -587,10 +656,10 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
             jdbc.sql("""
                     INSERT INTO inventory_reservations
                         (id, restaurant_id, order_id, order_item_id, ingredient_stock_id, master_ingredient_id,
-                         quantity_base, status, created_by, updated_by)
+                         quantity_base, unit_cost_snapshot, status, created_by, updated_by)
                     VALUES
                         (:id, :restaurantId, :orderId, :orderItemId, :stockId, :ingredientId,
-                         :quantity, :status::inventory_reservation_status, :createdBy, :updatedBy)
+                         :quantity, :unitCost, :status::inventory_reservation_status, :createdBy, :updatedBy)
                     """)
                     .param("id", id)
                     .param("restaurantId", reservation.getRestaurantId())
@@ -599,6 +668,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                     .param("stockId", stock.stockId())
                     .param("ingredientId", reservation.getMasterIngredientId())
                     .param("quantity", reservation.getQuantityBase())
+                    .param("unitCost", reservation.getUnitCostSnapshot())
                     .param("status", reservation.getStatus().name())
                     .param("createdBy", reservation.getCreatedBy())
                     .param("updatedBy", reservation.getUpdatedBy())
@@ -671,7 +741,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                          quantity_base, unit_cost_snapshot, inventory_transaction_id, created_by)
                     VALUES
                         (:restaurantId, :orderId, :orderItemId, :stockId, :ingredientId,
-                         :quantity, 0, :txId, :createdBy)
+                         :quantity, :unitCost, :txId, :createdBy)
                     """)
                     .param("restaurantId", reservation.getRestaurantId())
                     .param("orderId", reservation.getOrderId())
@@ -679,6 +749,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                     .param("stockId", reservation.getIngredientStockId())
                     .param("ingredientId", reservation.getMasterIngredientId())
                     .param("quantity", reservation.getQuantityBase())
+                    .param("unitCost", reservation.getUnitCostSnapshot())
                     .param("txId", txId)
                     .param("createdBy", userId)
                     .update();
@@ -1235,9 +1306,15 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
         slots.forEach(slot -> slot.setOptions(jdbc.sql("""
                 SELECT o.id AS slot_option_id, i.id AS item_id, i.name AS item_name,
                        o.surcharge, o.max_quantity, o.is_default, o.sort_order,
-                       i.is_active AS item_active
+                       i.is_active AS item_active,
+                       COALESCE(availability.status::text = 'UNAVAILABLE', false) AS manually_unavailable
                   FROM slot_options o
                   JOIN items i ON i.id = o.item_id
+             LEFT JOIN catalog_availability_overrides availability
+                    ON availability.restaurant_id = o.restaurant_id
+                   AND availability.reference_type = 'PRODUCT'
+                   AND availability.reference_id = i.id
+                   AND (availability.expires_at IS NULL OR availability.expires_at > NOW())
                  WHERE o.slot_id = :slotId
                  ORDER BY o.sort_order ASC
                 """)
@@ -1249,9 +1326,11 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                         .surcharge(rs.getBigDecimal("surcharge"))
                         .maxQuantity(rs.getInt("max_quantity"))
                         .isDefault(rs.getBoolean("is_default"))
-                        .available(rs.getBoolean("item_active"))
+                        .available(rs.getBoolean("item_active") && !rs.getBoolean("manually_unavailable"))
                         .lowStock(false)
-                        .unavailableReason(rs.getBoolean("item_active") ? null : "Producto inactivo")
+                        .unavailableReason(!rs.getBoolean("item_active")
+                                ? "Producto inactivo"
+                                : rs.getBoolean("manually_unavailable") ? "Agotado manualmente" : null)
                         .sortOrder(rs.getInt("sort_order"))
                         .build())
                 .list()));
@@ -1477,11 +1556,27 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .ingredientStockId(rs.getObject("ingredient_stock_id", UUID.class))
                 .masterIngredientId(rs.getObject("master_ingredient_id", UUID.class))
                 .quantityBase(rs.getBigDecimal("quantity_base"))
+                .unitCostSnapshot(rs.getBigDecimal("unit_cost_snapshot"))
                 .status(InventoryReservationStatus.valueOf(rs.getString("status")))
                 .createdAt(rs.getObject("created_at", OffsetDateTime.class))
                 .updatedAt(rs.getObject("updated_at", OffsetDateTime.class))
                 .createdBy(rs.getObject("created_by", UUID.class))
                 .updatedBy(rs.getObject("updated_by", UUID.class))
+                .build();
+    }
+
+    private OrderItemIngredientRequirementDomain mapIngredientRequirement(ResultSet rs, int rowNum)
+            throws SQLException {
+        return OrderItemIngredientRequirementDomain.builder()
+                .id(rs.getObject("id", UUID.class))
+                .restaurantId(rs.getObject("restaurant_id", UUID.class))
+                .orderId(rs.getObject("order_id", UUID.class))
+                .orderItemId(rs.getObject("order_item_id", UUID.class))
+                .masterIngredientId(rs.getObject("master_ingredient_id", UUID.class))
+                .ingredientNameSnapshot(rs.getString("ingredient_name_snapshot"))
+                .quantityBasePerSaleUnit(rs.getBigDecimal("quantity_base_per_sale_unit"))
+                .unitCostSnapshot(rs.getBigDecimal("unit_cost_snapshot"))
+                .createdAt(rs.getObject("created_at", OffsetDateTime.class))
                 .build();
     }
 

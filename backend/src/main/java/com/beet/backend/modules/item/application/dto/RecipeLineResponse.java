@@ -12,5 +12,8 @@ public record RecipeLineResponse(
         UUID childItemId,
         BigDecimal quantity,
         UUID unitId,
+        String sourceName,
+        String unitName,
+        String unitAbbreviation,
         int sortOrder) {
 }

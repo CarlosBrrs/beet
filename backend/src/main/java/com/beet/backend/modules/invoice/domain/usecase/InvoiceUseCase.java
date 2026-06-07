@@ -5,6 +5,7 @@ import com.beet.backend.modules.inventory.domain.model.InventoryStockDomain;
 import com.beet.backend.modules.inventory.domain.model.InventoryTransactionDomain;
 import com.beet.backend.modules.inventory.domain.model.TransactionReason;
 import com.beet.backend.modules.inventory.domain.spi.InventoryPersistencePort;
+import com.beet.backend.modules.item.domain.api.RecipeCalculationServicePort;
 import com.beet.backend.modules.invoice.domain.api.InvoiceServicePort;
 import com.beet.backend.modules.invoice.domain.model.InvoiceDomain;
 import com.beet.backend.modules.invoice.domain.model.InvoiceItemDomain;
@@ -36,6 +37,7 @@ public class InvoiceUseCase implements InvoiceServicePort {
     private final InvoicePersistencePort invoicePersistence;
     private final SupplierItemQueryPort supplierItemQuery;
     private final InventoryPersistencePort inventoryPersistence;
+    private final RecipeCalculationServicePort recipeCalculationService;
 
     @Override
     @Transactional
@@ -107,6 +109,7 @@ public class InvoiceUseCase implements InvoiceServicePort {
         BigDecimal newCostBase = item.getUnitPricePurchased()
                 .divide(conversionFactor, 6, RoundingMode.HALF_UP);
         supplierItemQuery.updateLastCostBase(item.getSupplierItemId(), newCostBase);
+        recipeCalculationService.recalculateDependentsForIngredient(masterIngredientId, userId);
 
         log.debug("Updated last_cost_base for supplier_item {} → {}", item.getSupplierItemId(), newCostBase);
 

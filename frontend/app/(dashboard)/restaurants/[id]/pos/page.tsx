@@ -94,6 +94,12 @@ function getSlotSelectedUnits(line: CartLine, slot: PosTemplateSlotResponse) {
     return slot.options.reduce((total, option) => total + (selections[option.slotOptionId] ?? 0), 0)
 }
 
+function getOptionLimit(option: PosTemplateOptionResponse) {
+    return option.maxAvailableUnits === null
+        ? option.maxQuantity
+        : Math.min(option.maxQuantity, option.maxAvailableUnits)
+}
+
 function getSlotValidationMessage(line: CartLine, slot: PosTemplateSlotResponse) {
     const selectedUnits = getSlotSelectedUnits(line, slot)
     if (selectedUnits < slot.minSelection) {
@@ -106,7 +112,7 @@ function getSlotValidationMessage(line: CartLine, slot: PosTemplateSlotResponse)
     const selections = line.selections?.[slot.slotId] ?? {}
     const invalidOption = slot.options.find((option) => {
         const quantity = selections[option.slotOptionId] ?? 0
-        return quantity > 0 && (!option.available || quantity > option.maxQuantity)
+        return quantity > 0 && (!option.available || quantity > getOptionLimit(option))
     })
     if (invalidOption && !invalidOption.available) return `${invalidOption.itemName} no esta disponible.`
     if (invalidOption) return `${invalidOption.itemName} supera su maximo.`
@@ -215,7 +221,14 @@ export default function PosPage() {
                     return [...current, { key: createCartKey(entry), entry, quantity: 1 }]
                 }
                 return current.map((line) =>
-                    line.key === entry.nodeId ? { ...line, quantity: line.quantity + 1 } : line
+                    line.key === entry.nodeId
+                        ? {
+                            ...line,
+                            quantity: entry.maxAvailableUnits === null
+                                ? line.quantity + 1
+                                : Math.min(line.quantity + 1, entry.maxAvailableUnits),
+                        }
+                        : line
                 )
             }
 
@@ -233,7 +246,14 @@ export default function PosPage() {
 
     const updateQuantity = (key: string, delta: number) => {
         setCart((current) => current
-            .map((line) => line.key === key ? { ...line, quantity: line.quantity + delta } : line)
+            .map((line) => {
+                if (line.key !== key) return line
+                const next = line.quantity + delta
+                const limited = line.entry.maxAvailableUnits === null
+                    ? next
+                    : Math.min(next, line.entry.maxAvailableUnits)
+                return { ...line, quantity: limited }
+            })
             .filter((line) => line.quantity > 0))
     }
 
@@ -505,6 +525,9 @@ export default function PosPage() {
                             <p className="mt-4 font-mono text-lg">{formatCurrency(entry.price)}</p>
                             <div className="mt-3 flex flex-wrap gap-2">
                                 {entry.lowStock && <Badge variant="outline" className="border-amber-500 text-amber-700">Stock bajo</Badge>}
+                                {entry.maxAvailableUnits !== null && entry.available && (
+                                    <Badge variant="outline">Máx. {entry.maxAvailableUnits}</Badge>
+                                )}
                                 {!entry.available && <Badge variant="destructive">Agotado</Badge>}
                             </div>
                             {entry.unavailableReason && (
@@ -606,7 +629,13 @@ export default function PosPage() {
                                                 <Minus className="h-4 w-4" />
                                             </Button>
                                             <span className="w-8 text-center text-sm">{line.quantity}</span>
-                                            <Button variant="outline" size="icon" onClick={() => updateQuantity(line.key, 1)}>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                disabled={line.entry.maxAvailableUnits !== null
+                                                    && line.quantity >= line.entry.maxAvailableUnits}
+                                                onClick={() => updateQuantity(line.key, 1)}
+                                            >
                                                 <Plus className="h-4 w-4" />
                                             </Button>
                                         </div>
@@ -684,7 +713,7 @@ export default function PosPage() {
                                                                     {slot.options.map((option) => {
                                                                         const optionQuantity = line.selections?.[slot.slotId]?.[option.slotOptionId] ?? 0
                                                                         const disabled = !option.available
-                                                                            || (slot.maxSelection !== 1 && optionQuantity >= option.maxQuantity)
+                                                                            || (slot.maxSelection !== 1 && optionQuantity >= getOptionLimit(option))
                                                                         return (
                                                                             <SelectItem
                                                                                 key={option.slotOptionId}
@@ -708,7 +737,7 @@ export default function PosPage() {
                                                                 const canSelect = option.available
                                                                     && (checked || selectedUnits < slot.maxSelection)
                                                                 const canIncrease = option.available
-                                                                    && optionQuantity < option.maxQuantity
+                                                                    && optionQuantity < getOptionLimit(option)
                                                                     && selectedUnits < slot.maxSelection
 
                                                                 return (
@@ -752,7 +781,8 @@ export default function PosPage() {
                                                                                 {!option.available && <Badge variant="destructive">Agotado</Badge>}
                                                                             </div>
                                                                             <p className="text-xs text-muted-foreground">
-                                                                                Max {option.maxQuantity}
+                                                                                Max {getOptionLimit(option)}
+                                                                                {option.maxAvailableUnits !== null && " por inventario"}
                                                                                 {option.isDefault && " · predeterminado"}
                                                                                 {isFixedSingleOption && " · fijo"}
                                                                             </p>

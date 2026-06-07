@@ -29,10 +29,17 @@ public class ItemDomain {
     // Yield — stored as entered by the user, normalized at calculation time
     private BigDecimal yieldQty;
     private UUID yieldUnitId;
+    private Integer sellableUnitsPerBatch;
 
     // Pricing
     private BigDecimal salePrice; // Set by user (PRODUCT only)
     private BigDecimal theoreticalCost; // Calculated by system (or entered if flat)
+    private BigDecimal batchTheoreticalCost;
+    private BigDecimal portionSize;
+    private UUID portionUnitId;
+    private String portionUnitAbbreviation;
+    @Builder.Default
+    private List<String> missingCostIngredients = new ArrayList<>();
     private boolean isActive;
     private boolean isAvailableAsTemplateOption;
     private boolean isPublished;
@@ -47,4 +54,8 @@ public class ItemDomain {
     // BOM lines (loaded with item when needed)
     @Builder.Default
     private List<RecipeLineDomain> recipeLines = new ArrayList<>();
+
+    public boolean isCostComplete() {
+        return missingCostIngredients == null || missingCostIngredients.isEmpty();
+    }
 }

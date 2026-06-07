@@ -4,6 +4,8 @@ import com.beet.backend.modules.item.domain.model.ItemClass;
 import com.beet.backend.modules.item.domain.model.ItemDomain;
 import com.beet.backend.modules.item.domain.model.RecipeLineDomain;
 import com.beet.backend.modules.item.domain.model.ProductDependenciesDomain;
+import com.beet.backend.modules.item.domain.model.IngredientCostSource;
+import com.beet.backend.modules.item.domain.model.UnitConversion;
 import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 
 import java.util.List;
@@ -40,12 +42,30 @@ public interface ItemPersistencePort {
 
     // For cost calculation: retrieve the base_unit factor for a given unit
     // Returns factor_to_base (1 if it's already a base unit)
-    java.math.BigDecimal getUnitFactorToBase(UUID unitId);
+    UnitConversion getUnitConversion(UUID unitId);
+
+    default java.math.BigDecimal getUnitFactorToBase(UUID unitId) {
+        return getUnitConversion(unitId).factorToBase();
+    }
+
+    java.math.BigDecimal convertUnit(UUID sourceUnitId, UUID targetBaseUnitId, java.math.BigDecimal quantity);
 
     java.util.Optional<UUID> findUnitIdByAbbreviation(String abbreviation);
 
     // For cost calculation: retrieve last_cost_base for a master_ingredient
-    java.math.BigDecimal getIngredientLastCostBase(UUID masterIngredientId);
+    Optional<IngredientCostSource> findIngredientCostSource(UUID masterIngredientId);
+
+    default java.math.BigDecimal getIngredientLastCostBase(UUID masterIngredientId) {
+        return findIngredientCostSource(masterIngredientId)
+                .map(IngredientCostSource::unitCost)
+                .orElse(java.math.BigDecimal.ZERO);
+    }
+
+    void updateTheoreticalCost(UUID itemId, java.math.BigDecimal theoreticalCost, UUID userId);
+
+    List<ItemDomain> findParentsByChildItem(UUID childItemId);
+
+    List<ItemDomain> findParentsByIngredient(UUID masterIngredientId);
 
     // Create a submenu_nodes entry linking a PRODUCT to a submenu
     void saveSubmenuNode(UUID submenuId, UUID itemId);

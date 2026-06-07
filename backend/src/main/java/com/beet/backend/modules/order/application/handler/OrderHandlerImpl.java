@@ -552,6 +552,7 @@ public class OrderHandlerImpl implements OrderHandler {
                 entry.getPrice(),
                 entry.isAvailable(),
                 entry.isLowStock(),
+                entry.getMaxAvailableUnits(),
                 entry.getUnavailableReason(),
                 entry.getSortOrder(),
                 entry.getInsufficientIngredients(),
@@ -579,6 +580,7 @@ public class OrderHandlerImpl implements OrderHandler {
                 option.isDefault(),
                 option.isAvailable(),
                 option.isLowStock(),
+                option.getMaxAvailableUnits(),
                 option.getUnavailableReason(),
                 option.getSortOrder(),
                 option.getInsufficientIngredients());

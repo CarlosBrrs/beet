@@ -23,6 +23,7 @@ public class PosTemplateOptionDomain {
     private boolean isDefault;
     private boolean available;
     private boolean lowStock;
+    private Integer maxAvailableUnits;
     private String unavailableReason;
     private int sortOrder;
 

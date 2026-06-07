@@ -137,7 +137,11 @@ export default function ProductsPage() {
                                         {product.description && <p className="mt-0.5 max-w-[240px] truncate text-xs font-normal text-muted-foreground">{product.description}</p>}
                                     </td>
                                     <td className="p-4 text-right font-mono">{product.salePrice ? formatCurrency(product.salePrice) : "-"}</td>
-                                    <td className="p-4 text-right font-mono text-muted-foreground">{product.theoreticalCost ? formatCurrency(product.theoreticalCost) : "-"}</td>
+                                    <td className="p-4 text-right font-mono text-muted-foreground">
+                                        {product.costComplete && product.theoreticalCost !== null
+                                            ? formatCurrency(product.theoreticalCost)
+                                            : <span className="text-amber-700">Costo incompleto</span>}
+                                    </td>
                                     <td className="p-4 text-center"><Badge variant="outline">{product.isInventoryTracked ? "Rastreado" : "Plano"}</Badge></td>
                                     <td className="p-4 text-center">
                                         {product.isAvailableAsTemplateOption

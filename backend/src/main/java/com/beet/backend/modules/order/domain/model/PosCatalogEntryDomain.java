@@ -27,6 +27,7 @@ public class PosCatalogEntryDomain {
     private BigDecimal price;
     private boolean available;
     private boolean lowStock;
+    private Integer maxAvailableUnits;
     private String unavailableReason;
     private int sortOrder;
 

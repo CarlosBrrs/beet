@@ -38,4 +38,7 @@ public class OrderItemDomain {
 
     @Builder.Default
     private List<OrderItemTemplateSlotDomain> templateSlots = new ArrayList<>();
+
+    @Builder.Default
+    private List<OrderItemIngredientRequirementDomain> ingredientRequirements = new ArrayList<>();
 }

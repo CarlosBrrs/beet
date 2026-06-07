@@ -522,6 +522,9 @@ export interface RecipeLineResponse {
     childItemId: string | null;
     quantity: number;
     unitId: string;
+    sourceName: string | null;
+    unitName: string | null;
+    unitAbbreviation: string | null;
     sortOrder: number;
 }
 
@@ -534,8 +537,15 @@ export interface ItemResponse {
     isInventoryTracked: boolean;
     yieldQty: number | null;
     yieldUnitId: string | null;
+    sellableUnitsPerBatch: number | null;
+    portionSize: number | null;
+    portionUnitId: string | null;
+    portionUnitAbbreviation: string | null;
+    batchTheoreticalCost: number | null;
     salePrice: number | null;
     theoreticalCost: number | null;
+    costComplete: boolean;
+    missingCostIngredients: string[];
     isActive: boolean;
     isAvailableAsTemplateOption: boolean;
     isPublished: boolean;
@@ -575,6 +585,7 @@ export interface CreateProductRequest {
     lines?: RecipeLineRequest[];           // Only for products with recipe
     yieldQty?: number;
     yieldUnitId?: string;
+    sellableUnitsPerBatch?: number;
 }
 
 export interface UpdateItemRequest {
@@ -583,6 +594,7 @@ export interface UpdateItemRequest {
     salePrice?: number;
     yieldQty?: number;
     yieldUnitId?: string;
+    sellableUnitsPerBatch?: number;
     userDefinedCost?: number;
     isAvailableAsTemplateOption?: boolean;
     lines?: RecipeLineRequest[];
@@ -702,6 +714,7 @@ export interface PosTemplateOptionResponse {
     isDefault: boolean;
     available: boolean;
     lowStock: boolean;
+    maxAvailableUnits: number | null;
     unavailableReason: string | null;
     sortOrder: number;
     insufficientIngredients: string[];
@@ -729,6 +742,7 @@ export interface PosCatalogResponse {
     price: number;
     available: boolean;
     lowStock: boolean;
+    maxAvailableUnits: number | null;
     unavailableReason: string | null;
     sortOrder: number;
     insufficientIngredients: string[];
@@ -803,7 +817,7 @@ export interface OrderItemDetailResponse {
     submenuNodeId: string | null;
     itemNameSnapshot: string;
     unitPriceSnapshot: number;
-    theoreticalCostSnapshot: number;
+    theoreticalCostSnapshot: number | null;
     quantity: number;
     subtotalGrossSnapshot: number;
     notes: string | null;
@@ -821,7 +835,7 @@ export interface OrderItemDetailResponse {
             itemNameSnapshot: string;
             quantity: number;
             surchargeSnapshot: number;
-            theoreticalCostSnapshot: number;
+            theoreticalCostSnapshot: number | null;
         }[];
     }[];
     taxes: unknown[];

@@ -26,6 +26,9 @@ public class RecipeLineDomain {
     // Stored in user-specified unit; normalized to base unit at calculation time
     private BigDecimal quantity;
     private UUID unitId;
+    private String sourceName;
+    private String unitName;
+    private String unitAbbreviation;
 
     private int sortOrder;
 }

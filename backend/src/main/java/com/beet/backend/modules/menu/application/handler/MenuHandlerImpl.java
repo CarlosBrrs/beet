@@ -208,8 +208,15 @@ public class MenuHandlerImpl implements MenuHandler {
                                 item.isInventoryTracked(),
                                 item.getYieldQty(),
                                 item.getYieldUnitId(),
+                                item.getSellableUnitsPerBatch(),
+                                item.getPortionSize(),
+                                item.getPortionUnitId(),
+                                item.getPortionUnitAbbreviation(),
+                                item.getBatchTheoreticalCost(),
                                 item.getSalePrice(),
                                 item.getTheoreticalCost(),
+                                item.isCostComplete(),
+                                item.getMissingCostIngredients(),
                                 item.isActive(),
                                 item.isAvailableAsTemplateOption(),
                                 item.isPublished(),
@@ -254,6 +261,7 @@ public class MenuHandlerImpl implements MenuHandler {
         private RecipeLineResponse mapLineToResponse(RecipeLineDomain l) {
                 return new RecipeLineResponse(
                                 l.getId(), l.getSource(), l.getMasterIngredientId(),
-                                l.getChildItemId(), l.getQuantity(), l.getUnitId(), l.getSortOrder());
+                                l.getChildItemId(), l.getQuantity(), l.getUnitId(),
+                                l.getSourceName(), l.getUnitName(), l.getUnitAbbreviation(), l.getSortOrder());
         }
 }

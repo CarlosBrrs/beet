@@ -1,6 +1,7 @@
 package com.beet.backend.modules.item.domain.usecase;
 
 import com.beet.backend.modules.item.domain.api.ItemServicePort;
+import com.beet.backend.modules.item.domain.api.RecipeCalculationServicePort;
 import com.beet.backend.modules.item.domain.exception.ItemAlreadyExistsException;
 import com.beet.backend.modules.item.domain.exception.ItemNotFoundException;
 import com.beet.backend.modules.item.domain.exception.ItemValidationException;
@@ -27,6 +28,7 @@ public class ItemUseCase implements ItemServicePort {
     private static final int SCALE = 6;
 
     private final ItemPersistencePort itemPersistencePort;
+    private final RecipeCalculationServicePort recipeCalculationService;
 
     // --------------------------------------------------------------------------
     // Public use cases
@@ -40,9 +42,8 @@ public class ItemUseCase implements ItemServicePort {
         ItemDomain saved = itemPersistencePort.save(item);
         saveRecipeLines(saved.getId(), item.getRecipeLines());
         saved.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(saved.getId()));
-        BigDecimal cost = calculateBomCost(saved);
-        saved.setTheoreticalCost(cost);
-        return itemPersistencePort.update(saved);
+        recipeCalculationService.recalculate(saved.getRestaurantId(), saved.getId(), saved.getUpdatedBy());
+        return getById(saved.getRestaurantId(), saved.getId());
     }
 
     @Override
@@ -68,9 +69,8 @@ public class ItemUseCase implements ItemServicePort {
         if (item.isInventoryTracked() && !item.getRecipeLines().isEmpty()) {
             saveRecipeLines(saved.getId(), item.getRecipeLines());
             saved.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(saved.getId()));
-            BigDecimal cost = calculateBomCost(saved);
-            saved.setTheoreticalCost(cost);
-            return itemPersistencePort.update(saved);
+            recipeCalculationService.recalculate(saved.getRestaurantId(), saved.getId(), saved.getUpdatedBy());
+            return getById(saved.getRestaurantId(), saved.getId());
         }
         return saved;
     }
@@ -113,6 +113,7 @@ public class ItemUseCase implements ItemServicePort {
         existing.setDescription(item.getDescription());
         existing.setYieldQty(item.getYieldQty());
         existing.setYieldUnitId(item.getYieldUnitId());
+        existing.setSellableUnitsPerBatch(item.getSellableUnitsPerBatch());
         existing.setSalePrice(item.getSalePrice());
         if (existing.getItemClass() == ItemClass.PRODUCT
                 && itemPersistencePort.isPublished(existing.getRestaurantId(), existing.getId())
@@ -138,10 +139,16 @@ public class ItemUseCase implements ItemServicePort {
         if (!existing.isInventoryTracked()) {
             existing.setTheoreticalCost(item.getTheoreticalCost());
         } else {
-            existing.setTheoreticalCost(calculateBomCost(existing));
+            existing.setTheoreticalCost(null);
         }
 
-        return decorateCatalogState(itemPersistencePort.update(existing));
+        ItemDomain updated = itemPersistencePort.update(existing);
+        if (updated.isInventoryTracked()) {
+            recipeCalculationService.recalculate(
+                    updated.getRestaurantId(), updated.getId(), updated.getUpdatedBy());
+            updated = getById(updated.getRestaurantId(), updated.getId());
+        }
+        return decorateCatalogState(updated);
     }
 
     @Override
@@ -171,6 +178,7 @@ public class ItemUseCase implements ItemServicePort {
         ItemDomain item = itemPersistencePort.findById(id)
                 .orElseThrow(() -> ItemNotFoundException.forId(id));
         item.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(id));
+        decorateRecipeCalculation(item);
         return decorateCatalogState(item);
     }
 
@@ -188,6 +196,7 @@ public class ItemUseCase implements ItemServicePort {
         List<ItemDomain> items = itemPersistencePort.findAllByRestaurantAndClass(restaurantId, itemClass);
         items.forEach(item -> {
             item.setRecipeLines(itemPersistencePort.findRecipeLinesByParent(item.getId()));
+            decorateRecipeCalculation(item);
             decorateCatalogState(item);
         });
         return items;
@@ -209,6 +218,7 @@ public class ItemUseCase implements ItemServicePort {
         PageResponse<ItemDomain> products = itemPersistencePort.findAllByRestaurantAndClassPaged(
                 restaurantId, ItemClass.PRODUCT, page, size, search);
         products.content().forEach(this::decorateCatalogState);
+        products.content().forEach(this::decorateRecipeCalculation);
         return products;
     }
 
@@ -243,6 +253,9 @@ public class ItemUseCase implements ItemServicePort {
             if (item.getYieldQty() == null || item.getYieldUnitId() == null) {
                 throw ItemValidationException.trackedProductRequiresYield();
             }
+            if (item.getSellableUnitsPerBatch() == null || item.getSellableUnitsPerBatch() < 1) {
+                throw new IllegalArgumentException("Tracked products require at least one sellable unit per batch.");
+            }
             validateNoCycles(item.getRecipeLines(), null);
             return;
         }
@@ -251,6 +264,7 @@ public class ItemUseCase implements ItemServicePort {
             throw ItemValidationException.flatProductCannotHaveRecipe();
         }
         item.setRecipeLines(List.of());
+        item.setSellableUnitsPerBatch(1);
         if (item.getYieldQty() == null) {
             item.setYieldQty(BigDecimal.ONE);
         }
@@ -282,24 +296,27 @@ public class ItemUseCase implements ItemServicePort {
      *
      * Returns the theoretical cost for ONE unit of the item (i.e. one yield qty).
      */
+    private void decorateRecipeCalculation(ItemDomain item) {
+        if (!item.isInventoryTracked() || item.getId() == null) {
+            item.setMissingCostIngredients(List.of());
+            return;
+        }
+        var result = recipeCalculationService.calculate(item.getRestaurantId(), item.getId());
+        item.setBatchTheoreticalCost(result.batchCost());
+        item.setTheoreticalCost(result.costPerSellableUnit());
+        item.setPortionUnitId(result.physicalBaseUnitId());
+        item.setPortionUnitAbbreviation(result.physicalBaseUnitAbbreviation());
+        item.setMissingCostIngredients(result.missingCostIngredients());
+        if (item.getItemClass() == ItemClass.PRODUCT && item.getSellableUnitsPerBatch() != null) {
+            item.setPortionSize(result.physicalYieldInBase().divide(
+                    BigDecimal.valueOf(item.getSellableUnitsPerBatch()),
+                    6,
+                    java.math.RoundingMode.HALF_UP));
+        }
+    }
+
     private BigDecimal calculateBomCost(ItemDomain item) {
-        if (item.getRecipeLines().isEmpty()) {
-            return BigDecimal.ZERO;
-        }
-
-        BigDecimal totalRawCost = BigDecimal.ZERO;
-
-        for (RecipeLineDomain line : item.getRecipeLines()) {
-            BigDecimal lineCost = calculateLineCost(line);
-            totalRawCost = totalRawCost.add(lineCost);
-        }
-
-        // Divide by yield to get cost per unit of output
-        BigDecimal yieldInBase = toBase(item.getYieldQty(), item.getYieldUnitId());
-        if (yieldInBase.compareTo(BigDecimal.ZERO) == 0) {
-            return BigDecimal.ZERO;
-        }
-        return totalRawCost.divide(yieldInBase, SCALE, RoundingMode.HALF_UP);
+        return recipeCalculationService.calculate(item.getRestaurantId(), item.getId()).costPerSellableUnit();
     }
 
     /**

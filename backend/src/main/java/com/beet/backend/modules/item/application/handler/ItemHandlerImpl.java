@@ -86,6 +86,7 @@ public class ItemHandlerImpl implements ItemHandler {
                 .theoreticalCost(tracked ? null : request.userDefinedCost())
                 .yieldQty(request.yieldQty())
                 .yieldUnitId(request.yieldUnitId())
+                .sellableUnitsPerBatch(request.sellableUnitsPerBatch())
                 .recipeLines(toRecipeLineDomains(request.lines()))
                 .isActive(true)
                 .isAvailableAsTemplateOption(Boolean.TRUE.equals(request.isAvailableAsTemplateOption()))
@@ -149,10 +150,14 @@ public class ItemHandlerImpl implements ItemHandler {
                 .salePrice(request.salePrice() != null ? request.salePrice() : existing.getSalePrice())
                 .yieldQty(request.yieldQty() != null ? request.yieldQty() : existing.getYieldQty())
                 .yieldUnitId(request.yieldUnitId() != null ? request.yieldUnitId() : existing.getYieldUnitId())
+                .sellableUnitsPerBatch(request.sellableUnitsPerBatch() != null
+                        ? request.sellableUnitsPerBatch() : existing.getSellableUnitsPerBatch())
                 .theoreticalCost(request.userDefinedCost())
                 .isAvailableAsTemplateOption(request.isAvailableAsTemplateOption() != null
                         ? request.isAvailableAsTemplateOption() : existing.isAvailableAsTemplateOption())
-                .recipeLines(request.lines() != null ? toRecipeLineDomains(request.lines()) : List.of())
+                .recipeLines(request.lines() != null
+                        ? toRecipeLineDomains(request.lines())
+                        : existing.getRecipeLines())
                 .updatedBy(SecurityUtils.getAuthenticatedUserId())
                 .build();
 
@@ -213,8 +218,15 @@ public class ItemHandlerImpl implements ItemHandler {
                 d.isInventoryTracked(),
                 d.getYieldQty(),
                 d.getYieldUnitId(),
+                d.getSellableUnitsPerBatch(),
+                d.getPortionSize(),
+                d.getPortionUnitId(),
+                d.getPortionUnitAbbreviation(),
+                d.getBatchTheoreticalCost(),
                 d.getSalePrice(),
                 d.getTheoreticalCost(),
+                d.isCostComplete(),
+                d.getMissingCostIngredients(),
                 d.isActive(),
                 d.isAvailableAsTemplateOption(),
                 d.isPublished(),
@@ -227,6 +239,7 @@ public class ItemHandlerImpl implements ItemHandler {
     private RecipeLineResponse toLineResponse(RecipeLineDomain l) {
         return new RecipeLineResponse(
                 l.getId(), l.getSource(), l.getMasterIngredientId(),
-                l.getChildItemId(), l.getQuantity(), l.getUnitId(), l.getSortOrder());
+                l.getChildItemId(), l.getQuantity(), l.getUnitId(),
+                l.getSourceName(), l.getUnitName(), l.getUnitAbbreviation(), l.getSortOrder());
     }
 }

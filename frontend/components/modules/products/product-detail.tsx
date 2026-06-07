@@ -48,8 +48,13 @@ export function ProductDetail({ menuId, submenuId, productId }: ProductDetailPro
                     <p className="text-lg font-semibold">{formatCurrency(product.salePrice || 0)}</p>
                 </div>
                 <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Cantidad producida</h4>
-                    <p className="text-lg">{product.yieldQty ? `${product.yieldQty} ` : "-"}</p>
+                    <h4 className="text-sm font-medium text-muted-foreground">Porciones del lote</h4>
+                    <p className="text-lg">{product.sellableUnitsPerBatch ?? 1}</p>
+                    {product.portionSize !== null && (
+                        <p className="text-xs text-muted-foreground">
+                            {product.portionSize} {product.portionUnitAbbreviation} por porción
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -70,13 +75,13 @@ export function ProductDetail({ menuId, submenuId, productId }: ProductDetailPro
                                 {product.recipeLines.map((line: import("@/lib/api-types").RecipeLineResponse) => (
                                     <tr key={line.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                                         <td className="p-4 align-middle">
-                                            {line.source === "INGREDIENT" ? line.masterIngredientId : line.childItemId}
+                                            {line.sourceName ?? "Elemento no disponible"}
                                         </td>
                                         <td className="p-4 align-middle capitalize text-muted-foreground">
                                             {line.source === "INGREDIENT" ? "Insumo" : "Preparación"}
                                         </td>
                                         <td className="p-4 align-middle">
-                                            {line.quantity}
+                                            {line.quantity} {line.unitAbbreviation}
                                         </td>
                                     </tr>
                                 ))}
