@@ -2,9 +2,11 @@
 
 import { useRestaurantContext } from "@/components/providers/restaurant-provider"
 import { useMyPermissions } from "@/lib/hooks/use-my-permissions"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CatalogRoadmapNote } from "@/components/modules/catalog/catalog-roadmap-note"
+import { OperationsRoadmapNote } from "@/components/modules/orders/operations-roadmap-note"
+import { DashboardReportSummary } from "@/components/modules/reports/dashboard-report-summary"
+import { Can } from "@/components/shared/can"
 
 export default function RestaurantDashboard() {
     const { restaurantId } = useRestaurantContext()
@@ -32,40 +34,15 @@ export default function RestaurantDashboard() {
                 Welcome back! You are logged in as <span className="font-bold text-foreground">{roleName}</span>.
             </p>
 
-            <div className="grid gap-4 md:grid-cols-3">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">$45,231.89</div>
-                        <p className="text-xs text-muted-foreground">+20.1% from last month</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">+573</div>
-                        <p className="text-xs text-muted-foreground">+201 since last hour</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Pending Alerts</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">3</div>
-                        <p className="text-xs text-muted-foreground">Kitchen display offline</p>
-                    </CardContent>
-                </Card>
-            </div>
+            <Can I="VIEW" a="FINANCE">
+                <DashboardReportSummary />
+            </Can>
 
             <div className="border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
                 Pendiente no bloqueante: permitir editar la zona horaria del restaurante despues de crearlo. Afecta numeracion diaria de ordenes, cajas, cortes y reportes.
             </div>
 
+            <OperationsRoadmapNote />
             <CatalogRoadmapNote />
         </div>
     )

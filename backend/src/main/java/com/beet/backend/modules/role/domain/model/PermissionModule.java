@@ -19,6 +19,7 @@ public enum PermissionModule {
     PRODUCTS,
     PREPARATIONS,
     TEMPLATES,
+    STAFF,
     // Wildcard for "all modules"
     ALL
 }

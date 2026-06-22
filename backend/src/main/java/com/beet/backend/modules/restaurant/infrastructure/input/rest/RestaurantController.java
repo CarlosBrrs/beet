@@ -4,7 +4,10 @@ import com.beet.backend.modules.restaurant.application.dto.RestaurantRequest;
 import com.beet.backend.modules.restaurant.application.dto.RestaurantResponse;
 import com.beet.backend.modules.restaurant.application.dto.RestaurantUpdateRequest;
 import com.beet.backend.modules.restaurant.application.handler.RestaurantHandler;
+import com.beet.backend.modules.role.domain.model.PermissionAction;
+import com.beet.backend.modules.role.domain.model.PermissionModule;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
+import com.beet.backend.shared.infrastructure.security.RequiresPermission;
 import com.beet.backend.shared.infrastructure.security.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,24 +33,24 @@ public class RestaurantController {
                 .body(handler.create(request, ownerId));
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiGenericResponse<RestaurantResponse>> getById(@PathVariable UUID id) {
-        UUID ownerId = SecurityUtils.getAuthenticatedUserId();
-        return ResponseEntity.ok(handler.getById(id, ownerId));
+    @GetMapping("/{restaurantId}")
+    public ResponseEntity<ApiGenericResponse<RestaurantResponse>> getById(@PathVariable UUID restaurantId) {
+        UUID userId = SecurityUtils.getAuthenticatedUserId();
+        return ResponseEntity.ok(handler.getById(restaurantId, userId));
     }
 
     @GetMapping("/my-restaurants")
     public ResponseEntity<ApiGenericResponse<List<RestaurantResponse>>> getMyRestaurants() {
-        UUID ownerId = SecurityUtils.getAuthenticatedUserId();
-        return ResponseEntity.ok(handler.getRestaurantsByOwner(ownerId));
+        UUID userId = SecurityUtils.getAuthenticatedUserId();
+        return ResponseEntity.ok(handler.getRestaurantsByOwner(userId));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{restaurantId}")
+    @RequiresPermission(module = PermissionModule.RESTAURANTS, action = PermissionAction.EDIT)
     public ResponseEntity<ApiGenericResponse<RestaurantResponse>> update(
-            @PathVariable UUID id,
+            @PathVariable UUID restaurantId,
             @RequestBody RestaurantUpdateRequest request) {
-        UUID ownerId = SecurityUtils.getAuthenticatedUserId();
-        return ResponseEntity.ok(handler.update(id, request, ownerId));
+        UUID userId = SecurityUtils.getAuthenticatedUserId();
+        return ResponseEntity.ok(handler.update(restaurantId, request, userId));
     }
-
 }

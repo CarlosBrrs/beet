@@ -2,6 +2,8 @@ package com.beet.backend.modules.cash.domain.usecase;
 
 import com.beet.backend.modules.cash.domain.api.CashSessionQueryPort;
 import com.beet.backend.modules.cash.domain.api.CashSessionServicePort;
+import com.beet.backend.modules.cash.domain.api.BusinessDayQueryPort;
+import com.beet.backend.modules.cash.domain.api.CashOperationsServicePort;
 import com.beet.backend.modules.cash.domain.exception.CashRegisterNotFoundException;
 import com.beet.backend.modules.cash.domain.exception.CashSessionConflictException;
 import com.beet.backend.modules.cash.domain.exception.CashSessionNotFoundException;
@@ -29,12 +31,15 @@ public class CashSessionUseCase implements CashSessionServicePort, CashSessionQu
 
     private final CashRegisterPersistencePort registerPersistencePort;
     private final CashSessionPersistencePort sessionPersistencePort;
+    private final BusinessDayQueryPort businessDayQuery;
+    private final CashOperationsServicePort cashOperationsService;
 
     @Override
     @Transactional
     public CashSessionDomain openSession(UUID restaurantId, UUID cashRegisterId, UUID userId,
             UUID deviceId, BigDecimal openingAmount, String notes) {
         CashRegisterDomain register = loadRegister(restaurantId, cashRegisterId);
+        UUID businessDayId = businessDayQuery.requireOpenBusinessDay(restaurantId).getId();
         if (!Boolean.TRUE.equals(register.getIsActive())) {
             throw new AccessDeniedException("Cash register is inactive");
         }
@@ -55,6 +60,7 @@ public class CashSessionUseCase implements CashSessionServicePort, CashSessionQu
 
         return sessionPersistencePort.create(CashSessionDomain.builder()
                 .restaurantId(restaurantId)
+                .businessDayId(businessDayId)
                 .cashRegisterId(cashRegisterId)
                 .status(CashSessionStatus.OPEN)
                 .openedBy(userId)
@@ -67,6 +73,24 @@ public class CashSessionUseCase implements CashSessionServicePort, CashSessionQu
     @Override
     @Transactional
     public CashSessionDomain closeSession(UUID restaurantId, UUID sessionId, UUID userId,
+            UUID deviceId, BigDecimal countedCash, String differenceReason, String notes) {
+        cashOperationsService.closeSession(
+                restaurantId, sessionId, userId, deviceId, countedCash, differenceReason, notes, false);
+        return sessionPersistencePort.findSessionById(sessionId)
+                .orElseThrow(() -> CashSessionNotFoundException.forId(sessionId));
+    }
+
+    @Override
+    @Transactional
+    public CashSessionDomain forceCloseSession(UUID restaurantId, UUID sessionId, UUID userId,
+            UUID deviceId, BigDecimal countedCash, String differenceReason, String notes) {
+        cashOperationsService.closeSession(
+                restaurantId, sessionId, userId, deviceId, countedCash, differenceReason, notes, true);
+        return sessionPersistencePort.findSessionById(sessionId)
+                .orElseThrow(() -> CashSessionNotFoundException.forId(sessionId));
+    }
+
+    CashSessionDomain closeSession(UUID restaurantId, UUID sessionId, UUID userId,
             UUID deviceId, BigDecimal closingAmount, String notes) {
         CashSessionDomain session = loadOpenSession(restaurantId, sessionId);
         if (!session.getOpenedDeviceId().equals(deviceId)) {
@@ -75,21 +99,30 @@ public class CashSessionUseCase implements CashSessionServicePort, CashSessionQu
         if (!session.getOpenedBy().equals(userId)) {
             throw new AccessDeniedException("Cash session belongs to another user");
         }
-        return closeAndRelease(session, userId, deviceId, closingAmount, notes);
+        return legacyCloseAndRelease(session, userId, deviceId, closingAmount, notes);
     }
 
-    @Override
-    @Transactional
-    public CashSessionDomain forceCloseSession(UUID restaurantId, UUID sessionId, UUID userId,
+    CashSessionDomain forceCloseSession(UUID restaurantId, UUID sessionId, UUID userId,
             UUID deviceId, BigDecimal closingAmount, String notes) {
-        CashSessionDomain session = loadOpenSession(restaurantId, sessionId);
-        return closeAndRelease(session, userId, deviceId, closingAmount, notes);
+        return legacyCloseAndRelease(
+                loadOpenSession(restaurantId, sessionId), userId, deviceId, closingAmount, notes);
     }
 
     @Override
     public CashSessionDomain getActiveSession(UUID restaurantId, UUID deviceId) {
         return sessionPersistencePort.findOpenByRestaurantAndDevice(restaurantId, deviceId)
                 .orElseThrow(() -> CashSessionNotFoundException.forDevice(deviceId));
+    }
+
+    @Override
+    @Transactional
+    public CashSessionDomain getSessionForUpdate(UUID restaurantId, UUID sessionId) {
+        CashSessionDomain session = sessionPersistencePort.findSessionByIdForUpdate(sessionId)
+                .orElseThrow(() -> CashSessionNotFoundException.forId(sessionId));
+        if (!restaurantId.equals(session.getRestaurantId())) {
+            throw new AccessDeniedException("Cash session does not belong to restaurant");
+        }
+        return session;
     }
 
     @Override
@@ -130,14 +163,11 @@ public class CashSessionUseCase implements CashSessionServicePort, CashSessionQu
         return session;
     }
 
-    private CashSessionDomain closeAndRelease(CashSessionDomain session, UUID userId, UUID deviceId,
-            BigDecimal closingAmount, String notes) {
+    private CashSessionDomain legacyCloseAndRelease(CashSessionDomain session, UUID userId,
+            UUID deviceId, BigDecimal closingAmount, String notes) {
         CashSessionDomain closed = sessionPersistencePort.close(
-                session.getId(),
-                userId,
-                deviceId,
-                requireNonNegative(closingAmount, "closingAmount"),
-                notes);
+                session.getId(), userId, deviceId,
+                requireNonNegative(closingAmount, "closingAmount"), notes);
         CashRegisterDomain register = loadRegister(session.getRestaurantId(), session.getCashRegisterId());
         register.setDeviceId(null);
         register.setUpdatedBy(userId);

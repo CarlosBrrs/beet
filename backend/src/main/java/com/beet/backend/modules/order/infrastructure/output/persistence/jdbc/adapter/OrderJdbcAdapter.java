@@ -34,7 +34,8 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
             Map.entry("customer", "LOWER(o.customer_name)"),
             Map.entry("orderStatus", "o.order_status"),
             Map.entry("paymentStatus", "o.payment_status"),
-            Map.entry("kitchenStatus", "o.kitchen_status"));
+            Map.entry("kitchenStatus", "o.kitchen_status"),
+            Map.entry("paymentExpiresAt", "o.payment_expires_at"));
 
     private static final Map<String, String> BILL_SORTS = Map.of(
             "createdAt", "b.created_at",
@@ -57,22 +58,26 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
         order.setId(orderId);
         return jdbc.sql("""
                 INSERT INTO orders
-                    (id, restaurant_id, origin_cash_session_id, origin_device_id,
+                    (id, restaurant_id, business_day_id, origin_cash_session_id, origin_device_id,
                      business_date, daily_sequence, public_code,
                      order_status, kitchen_status, payment_status, service_type, operation_mode_snapshot,
                      table_id, customer_name, customer_phone,
                      delivery_contact_name, delivery_phone, delivery_address, delivery_notes, delivery_fee, delivery_status,
                      prepayment_required_snapshot, tax_rate_snapshot, subtotal_gross_snapshot, tax_amount_snapshot,
-                     total_gross_snapshot, tip_total_snapshot, notes, created_by, updated_by)
+                     total_gross_snapshot, tip_total_snapshot, refund_due_snapshot, refunded_total_snapshot,
+                     payment_expires_at, payment_expired_at, expiration_processed_at,
+                     notes, created_by, updated_by)
                 VALUES
-                    (:id, :restaurantId, :originCashSessionId, :originDeviceId,
+                    (:id, :restaurantId, :businessDayId, :originCashSessionId, :originDeviceId,
                      :businessDate, :dailySequence, :publicCode,
                      :orderStatus::order_status, :kitchenStatus::kitchen_status, :paymentStatus::payment_status,
                      :serviceType::service_type, :operationMode::operation_mode_enum,
                      :tableId, :customerName, :customerPhone,
                      :deliveryContactName, :deliveryPhone, :deliveryAddress, :deliveryNotes, :deliveryFee, :deliveryStatus::delivery_status,
                      :prepaymentRequired, :taxRate, :subtotalGross, :taxAmount,
-                     :totalGross, :tipTotal, :notes, :createdBy, :updatedBy)
+                     :totalGross, :tipTotal, :refundDue, :refundedTotal,
+                     :paymentExpiresAt, :paymentExpiredAt, :expirationProcessedAt,
+                     :notes, :createdBy, :updatedBy)
                 RETURNING *
                 """)
                 .params(orderParams(order))
@@ -103,6 +108,11 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                        tax_amount_snapshot = :taxAmount,
                        total_gross_snapshot = :totalGross,
                        tip_total_snapshot = :tipTotal,
+                       refund_due_snapshot = :refundDue,
+                       refunded_total_snapshot = :refundedTotal,
+                       payment_expires_at = :paymentExpiresAt,
+                       payment_expired_at = :paymentExpiredAt,
+                       expiration_processed_at = :expirationProcessedAt,
                        notes = :notes,
                        canceled_at = CASE WHEN :orderStatus = 'CANCELED' THEN COALESCE(canceled_at, NOW()) ELSE canceled_at END,
                        completed_at = CASE WHEN :orderStatus = 'COMPLETED' THEN COALESCE(completed_at, NOW()) ELSE completed_at END,
@@ -323,6 +333,84 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
     }
 
     @Override
+    public OrderItemCancellationDomain applyItemCancellation(
+            OrderItemCancellationDomain cancellation,
+            BigDecimal originalQuantity,
+            BigDecimal activeSubtotal,
+            UUID userId) {
+        UUID cancellationId = cancellation.getId() != null ? cancellation.getId() : UUID.randomUUID();
+        cancellation.setId(cancellationId);
+        OrderItemCancellationDomain saved = jdbc.sql("""
+                INSERT INTO order_item_cancellations
+                    (id, restaurant_id, order_id, order_item_id, quantity, gross_amount, reason,
+                     kitchen_status_snapshot, inventory_disposition, created_by, system_generated)
+                VALUES
+                    (:id, :restaurantId, :orderId, :orderItemId, :quantity, :grossAmount, :reason,
+                     :kitchenStatus::kitchen_status,
+                     :inventoryDisposition::order_item_inventory_disposition, :createdBy, :systemGenerated)
+                RETURNING *
+                """)
+                .param("id", cancellationId)
+                .param("restaurantId", cancellation.getRestaurantId())
+                .param("orderId", cancellation.getOrderId())
+                .param("orderItemId", cancellation.getOrderItemId())
+                .param("quantity", cancellation.getQuantity())
+                .param("grossAmount", cancellation.getGrossAmount())
+                .param("reason", cancellation.getReason())
+                .param("kitchenStatus", cancellation.getKitchenStatusSnapshot().name())
+                .param("inventoryDisposition", cancellation.getInventoryDisposition().name())
+                .param("createdBy", cancellation.isSystemGenerated() ? null : userId)
+                .param("systemGenerated", cancellation.isSystemGenerated())
+                .query(this::mapItemCancellation)
+                .single();
+
+        List<OrderItemCancellationInventoryDomain> inventoryEntries =
+                cancellation.getInventoryDisposition() == OrderItemInventoryDisposition.RELEASE_RESERVED
+                        ? releaseReservationQuantities(cancellationId, cancellation, userId)
+                        : recordConsumedCancellation(cancellationId, cancellation, userId);
+
+        jdbc.sql("""
+                UPDATE order_items
+                   SET canceled_quantity = canceled_quantity + :quantity,
+                       subtotal_gross_snapshot = :activeSubtotal,
+                       updated_at = NOW(),
+                       updated_by = :userId
+                 WHERE id = :orderItemId
+                   AND canceled_quantity + :quantity <= quantity
+                """)
+                .param("quantity", cancellation.getQuantity())
+                .param("activeSubtotal", activeSubtotal)
+                .param("userId", userId)
+                .param("orderItemId", cancellation.getOrderItemId())
+                .update();
+
+        cancelKitchenTicketLines(cancellation.getOrderItemId(), cancellation.getQuantity());
+        saved.setInventoryEntries(inventoryEntries);
+        return saved;
+    }
+
+    @Override
+    public void cancelEmptyKitchenTickets(UUID orderId, UUID userId) {
+        jdbc.sql("""
+                UPDATE kitchen_tickets kt
+                   SET status = 'CANCELED',
+                       canceled_at = COALESCE(canceled_at, NOW()),
+                       canceled_by = COALESCE(canceled_by, :userId)
+                 WHERE kt.order_id = :orderId
+                   AND kt.status <> 'CANCELED'
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM kitchen_ticket_lines l
+                        WHERE l.kitchen_ticket_id = kt.id
+                          AND l.quantity > l.canceled_quantity
+                   )
+                """)
+                .param("orderId", orderId)
+                .param("userId", userId)
+                .update();
+    }
+
+    @Override
     public void replaceOrderTaxes(UUID orderId, List<OrderTaxDomain> taxes) {
         jdbc.sql("DELETE FROM order_taxes WHERE order_id = :orderId")
                 .param("orderId", orderId)
@@ -393,9 +481,11 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .list();
         hydrateTemplateSnapshots(items);
         items.forEach(item -> item.setIngredientRequirements(findIngredientRequirements(item.getId())));
+        items.forEach(item -> item.setCancellations(findItemCancellations(item.getId())));
         hydrateTaxes(orderId, domain, items);
         domain.setKitchenTickets(findTicketsByOrder(orderId));
         domain.setPayments(findPaymentsByOrder(orderId));
+        domain.setRefunds(findRefundsByOrder(domain.getRestaurantId(), orderId));
         domain.setItems(items);
         return Optional.of(domain);
     }
@@ -412,13 +502,17 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
 
     @Override
     public PageResponse<OrderDomain> findAllPaged(UUID restaurantId, int page, int size, String search) {
-        return findAllPaged(new OrderSearchCriteria(restaurantId, page, size, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null, search));
+        return findAllPaged(new OrderSearchCriteria(
+                restaurantId, page, size,
+                null, null, null, null, null, null,
+                null, null, null, null, null, null,
+                null, null, null, null, null,
+                search));
     }
 
     @Override
     public PageResponse<PosCatalogEntryDomain> findPosCatalog(UUID restaurantId, int page, int size, String search,
-            UUID menuId, UUID submenuId, String availability, String referenceType, String sort) {
+            UUID menuId, UUID submenuId, String referenceType, String sort) {
         Map<String, Object> params = new HashMap<>();
         params.put("restaurantId", restaurantId);
         StringBuilder base = new StringBuilder("""
@@ -454,14 +548,6 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 params.put("referenceType", type.name());
             } catch (IllegalArgumentException ignored) {
                 base.append(" AND 1 = 0 ");
-            }
-        }
-        if (availability != null && !availability.isBlank()) {
-            String normalized = availability.trim().toUpperCase();
-            if ("AVAILABLE".equals(normalized)) {
-                base.append(" AND COALESCE(o.status::text = 'UNAVAILABLE', false) = false ");
-            } else if ("UNAVAILABLE".equals(normalized)) {
-                base.append(" AND COALESCE(o.status::text = 'UNAVAILABLE', false) = true ");
             }
         }
         if (search != null && !search.isBlank()) {
@@ -548,7 +634,8 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 SELECT kt.*,
                        o.business_date AS order_business_date,
                        o.daily_sequence AS order_daily_sequence,
-                       o.public_code AS order_public_code
+                       o.public_code AS order_public_code,
+                       o.customer_name AS order_customer_name
                   FROM kitchen_tickets kt
                   JOIN orders o ON o.id = kt.order_id
                  WHERE kt.restaurant_id = :restaurantId AND kt.id = :ticketId
@@ -572,7 +659,8 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 SELECT kt.*,
                        o.business_date AS order_business_date,
                        o.daily_sequence AS order_daily_sequence,
-                       o.public_code AS order_public_code
+                       o.public_code AS order_public_code,
+                       o.customer_name AS order_customer_name
                   FROM kitchen_tickets kt
                   JOIN orders o ON o.id = kt.order_id
                  WHERE kt.restaurant_id = :restaurantId
@@ -616,7 +704,8 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 SELECT u.*,
                        o.business_date AS order_business_date,
                        o.daily_sequence AS order_daily_sequence,
-                       o.public_code AS order_public_code
+                       o.public_code AS order_public_code,
+                       o.customer_name AS order_customer_name
                   FROM updated u
                   JOIN orders o ON o.id = u.order_id
                 """)
@@ -686,6 +775,51 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .param("orderItemId", orderItemId)
                 .param("userId", userId)
                 .update();
+    }
+
+    @Override
+    public void releaseReservationsByOrder(UUID orderId, UUID userId) {
+        jdbc.sql("""
+                UPDATE inventory_reservations
+                   SET status = 'RELEASED', updated_at = NOW(), updated_by = :userId
+                 WHERE order_id = :orderId AND status = 'ACTIVE'
+                """)
+                .param("orderId", orderId)
+                .param("userId", userId)
+                .update();
+    }
+
+    @Override
+    public List<OrderDomain> lockExpiredAwaitingPayments(OffsetDateTime now, int limit) {
+        return jdbc.sql("""
+                SELECT o.*
+                  FROM orders o
+                 WHERE o.order_status = 'AWAITING_PAYMENT'
+                   AND o.payment_expires_at <= :now
+                   AND o.expiration_processed_at IS NULL
+                 ORDER BY o.payment_expires_at, o.id
+                 LIMIT :limit
+                 FOR UPDATE SKIP LOCKED
+                """)
+                .param("now", now)
+                .param("limit", limit)
+                .query(this::mapOrder)
+                .list();
+    }
+
+    @Override
+    public void lockOrder(UUID restaurantId, UUID orderId) {
+        jdbc.sql("""
+                SELECT id
+                  FROM orders
+                 WHERE id = :orderId
+                   AND restaurant_id = :restaurantId
+                 FOR UPDATE
+                """)
+                .param("orderId", orderId)
+                .param("restaurantId", restaurantId)
+                .query(UUID.class)
+                .optional();
     }
 
     @Override
@@ -804,6 +938,32 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
     }
 
     @Override
+    public boolean existsPaymentMethodCode(UUID restaurantId, String code) {
+        Boolean exists = jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM payment_methods
+                     WHERE restaurant_id = :restaurantId AND code = :code
+                )
+                """)
+                .param("restaurantId", restaurantId)
+                .param("code", code)
+                .query(Boolean.class)
+                .single();
+        return Boolean.TRUE.equals(exists);
+    }
+
+    @Override
+    public int countActivePaymentMethods(UUID restaurantId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM payment_methods
+                 WHERE restaurant_id = :restaurantId AND is_active = TRUE
+                """)
+                .param("restaurantId", restaurantId)
+                .query(Integer.class)
+                .single();
+    }
+
+    @Override
     public PaymentMethodDomain updatePaymentMethod(PaymentMethodDomain method) {
         return jdbc.sql("""
                 UPDATE payment_methods
@@ -869,6 +1029,22 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
     }
 
     @Override
+    public Optional<PaymentDomain> findPayment(UUID restaurantId, UUID orderId, UUID paymentId) {
+        return jdbc.sql("""
+                SELECT *
+                  FROM payments
+                 WHERE id = :paymentId
+                   AND restaurant_id = :restaurantId
+                   AND order_id = :orderId
+                """)
+                .param("paymentId", paymentId)
+                .param("restaurantId", restaurantId)
+                .param("orderId", orderId)
+                .query(this::mapPayment)
+                .optional();
+    }
+
+    @Override
     public BigDecimal sumRecordedPayments(UUID orderId) {
         return sumPaymentColumn(orderId, "amount");
     }
@@ -876,6 +1052,75 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
     @Override
     public BigDecimal sumRecordedTips(UUID orderId) {
         return sumPaymentColumn(orderId, "tip_amount");
+    }
+
+    @Override
+    public PaymentRefundDomain saveRefund(PaymentRefundDomain refund) {
+        UUID id = refund.getId() != null ? refund.getId() : UUID.randomUUID();
+        refund.setId(id);
+        return jdbc.sql("""
+                INSERT INTO payment_refunds
+                    (id, restaurant_id, order_id, payment_id, cash_session_id, device_id,
+                     amount, status, reason, external_reference, created_by)
+                VALUES
+                    (:id, :restaurantId, :orderId, :paymentId, :cashSessionId, :deviceId,
+                     :amount, :status::payment_refund_status, :reason, :reference, :createdBy)
+                RETURNING *
+                """)
+                .param("id", id)
+                .param("restaurantId", refund.getRestaurantId())
+                .param("orderId", refund.getOrderId())
+                .param("paymentId", refund.getPaymentId())
+                .param("cashSessionId", refund.getCashSessionId())
+                .param("deviceId", refund.getDeviceId())
+                .param("amount", refund.getAmount())
+                .param("status", refund.getStatus().name())
+                .param("reason", refund.getReason())
+                .param("reference", refund.getExternalReference())
+                .param("createdBy", refund.getCreatedBy())
+                .query(this::mapRefund)
+                .single();
+    }
+
+    @Override
+    public List<PaymentRefundDomain> findRefundsByOrder(UUID restaurantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT *
+                  FROM payment_refunds
+                 WHERE restaurant_id = :restaurantId
+                   AND order_id = :orderId
+                 ORDER BY created_at ASC
+                """)
+                .param("restaurantId", restaurantId)
+                .param("orderId", orderId)
+                .query(this::mapRefund)
+                .list();
+    }
+
+    @Override
+    public BigDecimal sumRecordedRefunds(UUID orderId) {
+        return jdbc.sql("""
+                SELECT COALESCE(SUM(amount), 0)
+                  FROM payment_refunds
+                 WHERE order_id = :orderId
+                   AND status = 'RECORDED'
+                """)
+                .param("orderId", orderId)
+                .query(BigDecimal.class)
+                .single();
+    }
+
+    @Override
+    public BigDecimal sumRecordedRefundsByPayment(UUID paymentId) {
+        return jdbc.sql("""
+                SELECT COALESCE(SUM(amount), 0)
+                  FROM payment_refunds
+                 WHERE payment_id = :paymentId
+                   AND status = 'RECORDED'
+                """)
+                .param("paymentId", paymentId)
+                .query(BigDecimal.class)
+                .single();
     }
 
     @Override
@@ -1005,6 +1250,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
         Map<String, Object> params = new HashMap<>();
         params.put("id", order.getId());
         params.put("restaurantId", order.getRestaurantId());
+        params.put("businessDayId", order.getBusinessDayId());
         params.put("originCashSessionId", order.getOriginCashSessionId() != null
                 ? order.getOriginCashSessionId()
                 : order.getCashSessionId());
@@ -1032,6 +1278,11 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
         params.put("taxAmount", value(order.getTaxAmountSnapshot()));
         params.put("totalGross", value(order.getTotalGrossSnapshot()));
         params.put("tipTotal", value(order.getTipTotalSnapshot()));
+        params.put("refundDue", value(order.getRefundDueSnapshot()));
+        params.put("refundedTotal", value(order.getRefundedTotalSnapshot()));
+        params.put("paymentExpiresAt", order.getPaymentExpiresAt());
+        params.put("paymentExpiredAt", order.getPaymentExpiredAt());
+        params.put("expirationProcessedAt", order.getExpirationProcessedAt());
         params.put("notes", order.getNotes());
         params.put("cancelReason", order.getCancelReason());
         params.put("createdBy", order.getCreatedBy());
@@ -1100,6 +1351,11 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
             where.append(" AND o.delivery_status = :deliveryStatus::delivery_status ");
             params.put("deliveryStatus", c.deliveryStatus().name());
         }
+        if (c.paymentPendingState() != null) {
+            where.append(c.paymentPendingState() == PaymentPendingState.ACTIVE
+                    ? " AND o.order_status = 'AWAITING_PAYMENT' AND o.payment_expired_at IS NULL "
+                    : " AND o.order_status = 'AWAITING_PAYMENT' AND o.payment_expired_at IS NOT NULL ");
+        }
         if (c.search() != null && !c.search().isBlank()) {
             where.append("""
                     AND (
@@ -1127,7 +1383,11 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .params(params)
                 .query(Long.class)
                 .single();
-        List<OrderDomain> content = jdbc.sql("SELECT o.*" + where
+        List<OrderDomain> content = jdbc.sql("""
+                SELECT o.*,
+                       COALESCE((SELECT SUM(p.amount) FROM payments p
+                                  WHERE p.order_id = o.id AND p.status = 'RECORDED'), 0) AS paid_total
+                """ + where
                 + " ORDER BY " + orderClause
                 + " LIMIT :size OFFSET :offset")
                 .params(withPage(params, page, size))
@@ -1154,6 +1414,207 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
         params.put("size", size);
         params.put("offset", (long) page * size);
         return params;
+    }
+
+    private List<OrderItemCancellationInventoryDomain> releaseReservationQuantities(
+            UUID cancellationId,
+            OrderItemCancellationDomain cancellation,
+            UUID userId) {
+        List<CancellationSource> sources = jdbc.sql("""
+                SELECT r.id AS reservation_id,
+                       r.ingredient_stock_id,
+                       r.master_ingredient_id,
+                       r.quantity_base AS remaining_quantity,
+                       r.unit_cost_snapshot,
+                       req.quantity_base_per_sale_unit
+                  FROM inventory_reservations r
+                  JOIN order_item_ingredient_requirements req
+                    ON req.order_item_id = r.order_item_id
+                   AND req.master_ingredient_id = r.master_ingredient_id
+                 WHERE r.order_item_id = :orderItemId
+                   AND r.status = 'ACTIVE'
+                 ORDER BY r.master_ingredient_id
+                """)
+                .param("orderItemId", cancellation.getOrderItemId())
+                .query((rs, rowNum) -> new CancellationSource(
+                        rs.getObject("reservation_id", UUID.class),
+                        rs.getObject("ingredient_stock_id", UUID.class),
+                        rs.getObject("master_ingredient_id", UUID.class),
+                        rs.getBigDecimal("remaining_quantity"),
+                        rs.getBigDecimal("quantity_base_per_sale_unit"),
+                        rs.getBigDecimal("unit_cost_snapshot")))
+                .list();
+
+        List<OrderItemCancellationInventoryDomain> entries = new ArrayList<>();
+        for (CancellationSource source : sources) {
+            BigDecimal requested = source.quantityPerUnit()
+                    .multiply(cancellation.getQuantity())
+                    .setScale(6, java.math.RoundingMode.HALF_UP);
+            BigDecimal released = requested.min(source.remainingQuantity());
+            BigDecimal remaining = source.remainingQuantity().subtract(released);
+            jdbc.sql("""
+                    UPDATE inventory_reservations
+                       SET quantity_base = CASE WHEN :remaining > 0 THEN :remaining ELSE quantity_base END,
+                           status = CASE WHEN :remaining > 0 THEN 'ACTIVE'::inventory_reservation_status
+                                         ELSE 'RELEASED'::inventory_reservation_status END,
+                           updated_at = NOW(),
+                           updated_by = :userId
+                     WHERE id = :reservationId
+                    """)
+                    .param("remaining", remaining)
+                    .param("userId", userId)
+                    .param("reservationId", source.sourceId())
+                    .update();
+            entries.add(saveCancellationInventory(
+                    cancellationId,
+                    source,
+                    released,
+                    OrderItemInventoryDisposition.RELEASE_RESERVED,
+                    null));
+        }
+        return entries;
+    }
+
+    private List<OrderItemCancellationInventoryDomain> recordConsumedCancellation(
+            UUID cancellationId,
+            OrderItemCancellationDomain cancellation,
+            UUID userId) {
+        List<CancellationSource> sources = jdbc.sql("""
+                SELECT consumption.id AS consumption_id,
+                       consumption.ingredient_stock_id,
+                       consumption.master_ingredient_id,
+                       consumption.quantity_base AS consumed_quantity,
+                       req.quantity_base_per_sale_unit,
+                       consumption.unit_cost_snapshot
+                  FROM order_item_ingredient_requirements req
+                  JOIN LATERAL (
+                      SELECT c.*
+                        FROM order_item_consumptions c
+                       WHERE c.order_item_id = req.order_item_id
+                         AND c.master_ingredient_id = req.master_ingredient_id
+                       ORDER BY c.created_at DESC
+                       LIMIT 1
+                  ) consumption ON TRUE
+                 WHERE req.order_item_id = :orderItemId
+                 ORDER BY consumption.master_ingredient_id
+                """)
+                .param("orderItemId", cancellation.getOrderItemId())
+                .query((rs, rowNum) -> new CancellationSource(
+                        rs.getObject("consumption_id", UUID.class),
+                        rs.getObject("ingredient_stock_id", UUID.class),
+                        rs.getObject("master_ingredient_id", UUID.class),
+                        rs.getBigDecimal("consumed_quantity"),
+                        rs.getBigDecimal("quantity_base_per_sale_unit"),
+                        rs.getBigDecimal("unit_cost_snapshot")))
+                .list();
+
+        List<OrderItemCancellationInventoryDomain> entries = new ArrayList<>();
+        for (CancellationSource source : sources) {
+            BigDecimal affected = source.quantityPerUnit()
+                    .multiply(cancellation.getQuantity())
+                    .setScale(6, java.math.RoundingMode.HALF_UP);
+            UUID transactionId = null;
+            if (cancellation.getInventoryDisposition() == OrderItemInventoryDisposition.RESTOCK) {
+                StockLock stock = lockStockById(source.stockId());
+                BigDecimal resulting = stock.currentStock().add(affected);
+                jdbc.sql("""
+                        UPDATE ingredient_stocks
+                           SET current_stock = :resulting,
+                               updated_at = NOW(),
+                               updated_by = :userId
+                         WHERE id = :stockId
+                        """)
+                        .param("resulting", resulting)
+                        .param("userId", userId)
+                        .param("stockId", stock.stockId())
+                        .update();
+                transactionId = UUID.randomUUID();
+                jdbc.sql("""
+                        INSERT INTO inventory_transactions
+                            (id, ingredient_stock_id, delta, reason, invoice_id, order_id, order_item_id,
+                             previous_stock, resulting_stock, notes, created_by)
+                        VALUES
+                            (:id, :stockId, :delta, 'SALE_REVERSAL', NULL, :orderId, :orderItemId,
+                             :previous, :resulting, :notes, :createdBy)
+                        """)
+                        .param("id", transactionId)
+                        .param("stockId", stock.stockId())
+                        .param("delta", affected)
+                        .param("orderId", cancellation.getOrderId())
+                        .param("orderItemId", cancellation.getOrderItemId())
+                        .param("previous", stock.currentStock())
+                        .param("resulting", resulting)
+                        .param("notes", "Restock from order item cancellation " + cancellationId)
+                        .param("createdBy", userId)
+                        .update();
+            }
+            entries.add(saveCancellationInventory(
+                    cancellationId,
+                    source,
+                    affected,
+                    cancellation.getInventoryDisposition(),
+                    transactionId));
+        }
+        return entries;
+    }
+
+    private OrderItemCancellationInventoryDomain saveCancellationInventory(
+            UUID cancellationId,
+            CancellationSource source,
+            BigDecimal quantity,
+            OrderItemInventoryDisposition disposition,
+            UUID transactionId) {
+        UUID id = UUID.randomUUID();
+        return jdbc.sql("""
+                INSERT INTO order_item_cancellation_inventory
+                    (id, cancellation_id, ingredient_stock_id, master_ingredient_id,
+                     quantity_base, unit_cost_snapshot, inventory_disposition, inventory_transaction_id)
+                VALUES
+                    (:id, :cancellationId, :stockId, :ingredientId,
+                     :quantity, :unitCost, :disposition::order_item_inventory_disposition, :transactionId)
+                RETURNING *
+                """)
+                .param("id", id)
+                .param("cancellationId", cancellationId)
+                .param("stockId", source.stockId())
+                .param("ingredientId", source.masterIngredientId())
+                .param("quantity", quantity)
+                .param("unitCost", source.unitCost())
+                .param("disposition", disposition.name())
+                .param("transactionId", transactionId)
+                .query(this::mapCancellationInventory)
+                .single();
+    }
+
+    private void cancelKitchenTicketLines(UUID orderItemId, BigDecimal quantity) {
+        List<KitchenLineBalance> lines = jdbc.sql("""
+                SELECT id, quantity - canceled_quantity AS active_quantity
+                  FROM kitchen_ticket_lines
+                 WHERE order_item_id = :orderItemId
+                   AND quantity > canceled_quantity
+                 ORDER BY id
+                """)
+                .param("orderItemId", orderItemId)
+                .query((rs, rowNum) -> new KitchenLineBalance(
+                        rs.getObject("id", UUID.class),
+                        rs.getBigDecimal("active_quantity")))
+                .list();
+        BigDecimal remaining = quantity;
+        for (KitchenLineBalance line : lines) {
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+                break;
+            }
+            BigDecimal canceled = remaining.min(line.activeQuantity());
+            jdbc.sql("""
+                    UPDATE kitchen_ticket_lines
+                       SET canceled_quantity = canceled_quantity + :quantity
+                     WHERE id = :lineId
+                    """)
+                    .param("quantity", canceled)
+                    .param("lineId", line.id())
+                    .update();
+            remaining = remaining.subtract(canceled);
+        }
     }
 
     private BigDecimal sumPaymentColumn(UUID orderId, String column) {
@@ -1250,7 +1711,8 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 SELECT kt.*,
                        o.business_date AS order_business_date,
                        o.daily_sequence AS order_daily_sequence,
-                       o.public_code AS order_public_code
+                       o.public_code AS order_public_code,
+                       o.customer_name AS order_customer_name
                   FROM kitchen_tickets kt
                   JOIN orders o ON o.id = kt.order_id
                  WHERE kt.order_id = :orderId
@@ -1264,12 +1726,40 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
     }
 
     private List<KitchenTicketLineDomain> findTicketLines(UUID ticketId) {
-        return jdbc.sql("""
-                SELECT * FROM kitchen_ticket_lines WHERE kitchen_ticket_id = :ticketId ORDER BY id ASC
+        List<KitchenTicketLineDomain> lines = jdbc.sql("""
+                SELECT l.*, oi.line_type
+                  FROM kitchen_ticket_lines l
+                  JOIN order_items oi ON oi.id = l.order_item_id
+                 WHERE l.kitchen_ticket_id = :ticketId
+                 ORDER BY l.id ASC
                 """)
                 .param("ticketId", ticketId)
                 .query(this::mapKitchenTicketLine)
                 .list();
+        hydrateTicketLineTemplateSnapshots(lines);
+        return lines;
+    }
+
+    private void hydrateTicketLineTemplateSnapshots(List<KitchenTicketLineDomain> lines) {
+        for (KitchenTicketLineDomain line : lines) {
+            List<OrderItemTemplateSlotDomain> slots = jdbc.sql("""
+                    SELECT * FROM order_item_template_slots
+                     WHERE order_item_id = :orderItemId
+                     ORDER BY sort_order ASC
+                    """)
+                    .param("orderItemId", line.getOrderItemId())
+                    .query(this::mapTemplateSlotSnapshot)
+                    .list();
+            slots.forEach(slot -> slot.setOptions(jdbc.sql("""
+                    SELECT * FROM order_item_template_options
+                     WHERE order_item_template_slot_id = :slotId
+                     ORDER BY created_at ASC
+                    """)
+                    .param("slotId", slot.getId())
+                    .query(this::mapTemplateOptionSnapshot)
+                    .list()));
+            line.setTemplateSlots(slots);
+        }
     }
 
     private List<PaymentDomain> findPaymentsByOrder(UUID orderId) {
@@ -1279,6 +1769,28 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .param("orderId", orderId)
                 .query(this::mapPayment)
                 .list();
+    }
+
+    private List<OrderItemCancellationDomain> findItemCancellations(UUID orderItemId) {
+        List<OrderItemCancellationDomain> cancellations = jdbc.sql("""
+                SELECT *
+                  FROM order_item_cancellations
+                 WHERE order_item_id = :orderItemId
+                 ORDER BY created_at ASC
+                """)
+                .param("orderItemId", orderItemId)
+                .query(this::mapItemCancellation)
+                .list();
+        cancellations.forEach(cancellation -> cancellation.setInventoryEntries(jdbc.sql("""
+                SELECT *
+                  FROM order_item_cancellation_inventory
+                 WHERE cancellation_id = :cancellationId
+                 ORDER BY created_at ASC
+                """)
+                .param("cancellationId", cancellation.getId())
+                .query(this::mapCancellationInventory)
+                .list()));
+        return cancellations;
     }
 
     private List<OrderBillAllocationDomain> findAllocations(UUID billId) {
@@ -1346,6 +1858,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
         return OrderDomain.builder()
                 .id(rs.getObject("id", UUID.class))
                 .restaurantId(rs.getObject("restaurant_id", UUID.class))
+                .businessDayId(rs.getObject("business_day_id", UUID.class))
                 .cashSessionId(originSession)
                 .originCashSessionId(originSession)
                 .originDeviceId(rs.getObject("origin_device_id", UUID.class))
@@ -1372,6 +1885,13 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .taxAmountSnapshot(rs.getBigDecimal("tax_amount_snapshot"))
                 .totalGrossSnapshot(rs.getBigDecimal("total_gross_snapshot"))
                 .tipTotalSnapshot(rs.getBigDecimal("tip_total_snapshot"))
+                .refundDueSnapshot(rs.getBigDecimal("refund_due_snapshot"))
+                .refundedTotalSnapshot(rs.getBigDecimal("refunded_total_snapshot"))
+                .paidTotal(hasColumn(rs, "paid_total") ? rs.getBigDecimal("paid_total") : BigDecimal.ZERO)
+                .remainingBalance(BigDecimal.ZERO)
+                .paymentExpiresAt(rs.getObject("payment_expires_at", OffsetDateTime.class))
+                .paymentExpiredAt(rs.getObject("payment_expired_at", OffsetDateTime.class))
+                .expirationProcessedAt(rs.getObject("expiration_processed_at", OffsetDateTime.class))
                 .notes(rs.getString("notes"))
                 .completedAt(rs.getObject("completed_at", OffsetDateTime.class))
                 .canceledAt(rs.getObject("canceled_at", OffsetDateTime.class))
@@ -1384,6 +1904,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .taxes(new ArrayList<>())
                 .kitchenTickets(new ArrayList<>())
                 .payments(new ArrayList<>())
+                .refunds(new ArrayList<>())
                 .build();
     }
 
@@ -1399,6 +1920,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .unitPriceSnapshot(rs.getBigDecimal("unit_price_snapshot"))
                 .theoreticalCostSnapshot(rs.getBigDecimal("theoretical_cost_snapshot"))
                 .quantity(rs.getBigDecimal("quantity"))
+                .canceledQuantity(rs.getBigDecimal("canceled_quantity"))
                 .subtotalGrossSnapshot(rs.getBigDecimal("subtotal_gross_snapshot"))
                 .notes(rs.getString("notes"))
                 .createdAt(rs.getObject("created_at", OffsetDateTime.class))
@@ -1407,6 +1929,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .updatedBy(rs.getObject("updated_by", UUID.class))
                 .taxes(new ArrayList<>())
                 .templateSlots(new ArrayList<>())
+                .cancellations(new ArrayList<>())
                 .build();
     }
 
@@ -1433,6 +1956,39 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .quantity(rs.getBigDecimal("quantity"))
                 .surchargeSnapshot(rs.getBigDecimal("surcharge_snapshot"))
                 .theoreticalCostSnapshot(rs.getBigDecimal("theoretical_cost_snapshot"))
+                .build();
+    }
+
+    private OrderItemCancellationDomain mapItemCancellation(ResultSet rs, int rowNum) throws SQLException {
+        return OrderItemCancellationDomain.builder()
+                .id(rs.getObject("id", UUID.class))
+                .restaurantId(rs.getObject("restaurant_id", UUID.class))
+                .orderId(rs.getObject("order_id", UUID.class))
+                .orderItemId(rs.getObject("order_item_id", UUID.class))
+                .quantity(rs.getBigDecimal("quantity"))
+                .grossAmount(rs.getBigDecimal("gross_amount"))
+                .reason(rs.getString("reason"))
+                .kitchenStatusSnapshot(KitchenStatus.valueOf(rs.getString("kitchen_status_snapshot")))
+                .inventoryDisposition(OrderItemInventoryDisposition.valueOf(rs.getString("inventory_disposition")))
+                .createdAt(rs.getObject("created_at", OffsetDateTime.class))
+                .createdBy(rs.getObject("created_by", UUID.class))
+                .systemGenerated(rs.getBoolean("system_generated"))
+                .inventoryEntries(new ArrayList<>())
+                .build();
+    }
+
+    private OrderItemCancellationInventoryDomain mapCancellationInventory(ResultSet rs, int rowNum)
+            throws SQLException {
+        return OrderItemCancellationInventoryDomain.builder()
+                .id(rs.getObject("id", UUID.class))
+                .cancellationId(rs.getObject("cancellation_id", UUID.class))
+                .ingredientStockId(rs.getObject("ingredient_stock_id", UUID.class))
+                .masterIngredientId(rs.getObject("master_ingredient_id", UUID.class))
+                .quantityBase(rs.getBigDecimal("quantity_base"))
+                .unitCostSnapshot(rs.getBigDecimal("unit_cost_snapshot"))
+                .inventoryDisposition(OrderItemInventoryDisposition.valueOf(rs.getString("inventory_disposition")))
+                .inventoryTransactionId(rs.getObject("inventory_transaction_id", UUID.class))
+                .createdAt(rs.getObject("created_at", OffsetDateTime.class))
                 .build();
     }
 
@@ -1492,6 +2048,7 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .orderBusinessDate(getOptionalLocalDate(rs, "order_business_date"))
                 .orderDailySequence(getOptionalInteger(rs, "order_daily_sequence"))
                 .orderPublicCode(getOptionalString(rs, "order_public_code"))
+                .customerName(getOptionalString(rs, "order_customer_name"))
                 .status(KitchenTicketStatus.valueOf(rs.getString("status")))
                 .sentAt(rs.getObject("sent_at", OffsetDateTime.class))
                 .sentBy(rs.getObject("sent_by", UUID.class))
@@ -1541,7 +2098,9 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .id(rs.getObject("id", UUID.class))
                 .kitchenTicketId(rs.getObject("kitchen_ticket_id", UUID.class))
                 .orderItemId(rs.getObject("order_item_id", UUID.class))
+                .lineType(hasColumn(rs, "line_type") ? OrderLineType.valueOf(rs.getString("line_type")) : null)
                 .quantity(rs.getBigDecimal("quantity"))
+                .canceledQuantity(rs.getBigDecimal("canceled_quantity"))
                 .itemNameSnapshot(rs.getString("item_name_snapshot"))
                 .notes(rs.getString("notes"))
                 .build();
@@ -1618,6 +2177,25 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
                 .build();
     }
 
+    private PaymentRefundDomain mapRefund(ResultSet rs, int rowNum) throws SQLException {
+        return PaymentRefundDomain.builder()
+                .id(rs.getObject("id", UUID.class))
+                .restaurantId(rs.getObject("restaurant_id", UUID.class))
+                .orderId(rs.getObject("order_id", UUID.class))
+                .paymentId(rs.getObject("payment_id", UUID.class))
+                .cashSessionId(rs.getObject("cash_session_id", UUID.class))
+                .deviceId(rs.getObject("device_id", UUID.class))
+                .amount(rs.getBigDecimal("amount"))
+                .status(PaymentRefundStatus.valueOf(rs.getString("status")))
+                .reason(rs.getString("reason"))
+                .externalReference(rs.getString("external_reference"))
+                .createdAt(rs.getObject("created_at", OffsetDateTime.class))
+                .createdBy(rs.getObject("created_by", UUID.class))
+                .voidedAt(rs.getObject("voided_at", OffsetDateTime.class))
+                .voidedBy(rs.getObject("voided_by", UUID.class))
+                .build();
+    }
+
     private OrderBillDomain mapBill(ResultSet rs, int rowNum) throws SQLException {
         return OrderBillDomain.builder()
                 .id(rs.getObject("id", UUID.class))
@@ -1648,5 +2226,17 @@ public class OrderJdbcAdapter implements OrderPersistencePort, OrderBillPersiste
     }
 
     private record StockLock(UUID stockId, BigDecimal currentStock) {
+    }
+
+    private record CancellationSource(
+            UUID sourceId,
+            UUID stockId,
+            UUID masterIngredientId,
+            BigDecimal remainingQuantity,
+            BigDecimal quantityPerUnit,
+            BigDecimal unitCost) {
+    }
+
+    private record KitchenLineBalance(UUID id, BigDecimal activeQuantity) {
     }
 }

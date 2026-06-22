@@ -120,7 +120,8 @@ public class CashHandlerImpl implements CashHandler {
                 sessionId,
                 SecurityUtils.getAuthenticatedUserId(),
                 deviceContext.getDeviceId(),
-                request.closingAmount(),
+                request.countedCash(),
+                request.differenceReason(),
                 request.notes());
         return ApiGenericResponse.success(toSessionResponse(closed));
     }
@@ -133,7 +134,8 @@ public class CashHandlerImpl implements CashHandler {
                 sessionId,
                 SecurityUtils.getAuthenticatedUserId(),
                 deviceContext.getDeviceId(),
-                request.closingAmount(),
+                request.countedCash(),
+                request.differenceReason(),
                 request.notes());
         return ApiGenericResponse.success(toSessionResponse(closed));
     }
@@ -251,6 +253,9 @@ public class CashHandlerImpl implements CashHandler {
                 session.closedBy(),
                 session.closedDeviceId(),
                 session.closingAmount(),
+                session.expectedCash(),
+                session.differenceAmount(),
+                session.differenceReason(),
                 session.notes());
     }
 

@@ -19,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { CashSessionResponse } from "@/lib/api-types"
 import { formatPriceDisplay, parsePriceInput } from "@/lib/formatters"
 import { useCloseCashSession } from "@/lib/hooks/use-cash-sessions"
+import { useCashSessionReconciliation } from "@/lib/hooks/use-cash-operations"
+import { formatCurrency } from "@/lib/formatters"
 
 import { closeCashSessionSchema, CloseCashSessionFormValues } from "./cash-session-schema"
 
@@ -30,10 +32,12 @@ interface CloseCashSessionDialogProps {
 
 export function CloseCashSessionDialog({ session, open, onOpenChange }: CloseCashSessionDialogProps) {
     const closeSession = useCloseCashSession()
+    const { data: reconciliation } = useCashSessionReconciliation(session.id, open)
     const form = useForm<CloseCashSessionFormValues>({
         resolver: zodResolver(closeCashSessionSchema),
         defaultValues: {
-            closingAmount: "",
+            countedCash: "",
+            differenceReason: "",
             notes: "",
         },
     })
@@ -48,7 +52,8 @@ export function CloseCashSessionDialog({ session, open, onOpenChange }: CloseCas
             {
                 sessionId: session.id,
                 request: {
-                    closingAmount: parsePriceInput(values.closingAmount),
+                    countedCash: parsePriceInput(values.countedCash),
+                    differenceReason: values.differenceReason.trim() || undefined,
                     notes: values.notes.trim() || undefined,
                 },
             },
@@ -64,12 +69,22 @@ export function CloseCashSessionDialog({ session, open, onOpenChange }: CloseCas
         >
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                    <div className="border bg-muted/30 p-3 text-sm">
+                        {reconciliation?.blind ? (
+                            <p>Conteo ciego: registra el efectivo contado antes de ver el esperado.</p>
+                        ) : (
+                            <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Efectivo esperado</span>
+                                <strong>{formatCurrency(Number(reconciliation?.expectedCash ?? 0))}</strong>
+                            </div>
+                        )}
+                    </div>
                     <FormField
                         control={form.control}
-                        name="closingAmount"
+                        name="countedCash"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Closing amount</FormLabel>
+                                <FormLabel>Efectivo contado</FormLabel>
                                 <FormControl>
                                     <Input
                                         inputMode="decimal"
@@ -79,6 +94,23 @@ export function CloseCashSessionDialog({ session, open, onOpenChange }: CloseCas
                                             field.onBlur()
                                             field.onChange(formatPriceDisplay(event.target.value))
                                         }}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="differenceReason"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Explicacion de diferencia</FormLabel>
+                                <FormControl>
+                                    <Textarea
+                                        placeholder="Obligatoria cuando el conteo no coincide"
+                                        className="resize-none"
+                                        {...field}
                                     />
                                 </FormControl>
                                 <FormMessage />

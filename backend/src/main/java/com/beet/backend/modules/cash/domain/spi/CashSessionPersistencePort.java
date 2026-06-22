@@ -19,6 +19,8 @@ public interface CashSessionPersistencePort {
 
     Optional<CashSessionDomain> findSessionById(UUID id);
 
+    Optional<CashSessionDomain> findSessionByIdForUpdate(UUID id);
+
     Optional<CashSessionDomain> findOpenByRegisterId(UUID cashRegisterId);
 
     Optional<CashSessionDomain> findOpenByRestaurantAndDevice(UUID restaurantId, UUID deviceId);

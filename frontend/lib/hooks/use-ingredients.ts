@@ -1,15 +1,16 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query"
+﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api-client"
 import {
     ApiGenericResponse,
     PageResponse,
-    MockIngredient,
     CreateIngredientRequest,
     IngredientResponse,
-    SupplierResponse,
     IngredientListResponse,
     IngredientDetailResponse
 } from "@/lib/api-types"
+import { SupplierKeys, useSuppliers } from "@/lib/hooks/use-suppliers"
+
+export { useSuppliers }
 
 export interface IngredientListParams {
     page: number
@@ -20,64 +21,10 @@ export interface IngredientListParams {
     units?: string[]
 }
 
-const MOCK_INGREDIENTS: MockIngredient[] = [
-    { id: "1", restaurantId: "mock", name: "Tomato", unit: "kg", cost: 1.50, currentStock: 20 },
-    { id: "2", restaurantId: "mock", name: "Flour", unit: "kg", cost: 0.80, currentStock: 50 },
-    { id: "3", restaurantId: "mock", name: "Mozzarella", unit: "kg", cost: 5.00, currentStock: 10 },
-    { id: "4", restaurantId: "mock", name: "Basil", unit: "g", cost: 0.05, currentStock: 500 },
-    { id: "5", restaurantId: "mock", name: "Olive Oil", unit: "l", cost: 8.00, currentStock: 15 },
-    // Veggies
-    { id: "6", restaurantId: "mock", name: "Onion", unit: "kg", cost: 1.20, currentStock: 30 },
-    { id: "7", restaurantId: "mock", name: "Garlic", unit: "kg", cost: 5.00, currentStock: 5 },
-    { id: "8", restaurantId: "mock", name: "Pepper", unit: "kg", cost: 2.50, currentStock: 10 },
-    { id: "9", restaurantId: "mock", name: "Lettuce", unit: "unit", cost: 0.50, currentStock: 50 },
-    { id: "10", restaurantId: "mock", name: "Carrot", unit: "kg", cost: 0.90, currentStock: 25 },
-    { id: "11", restaurantId: "mock", name: "Cucumber", unit: "kg", cost: 1.10, currentStock: 15 },
-    { id: "12", restaurantId: "mock", name: "Mushroom", unit: "kg", cost: 4.00, currentStock: 8 },
-    { id: "13", restaurantId: "mock", name: "Spinach", unit: "kg", cost: 3.50, currentStock: 12 },
-    { id: "14", restaurantId: "mock", name: "Broccoli", unit: "kg", cost: 2.00, currentStock: 20 },
-    { id: "15", restaurantId: "mock", name: "Potato", unit: "kg", cost: 0.60, currentStock: 100 },
-    // Dairy/Meat
-    { id: "16", restaurantId: "mock", name: "Milk", unit: "l", cost: 1.00, currentStock: 40 },
-    { id: "17", restaurantId: "mock", name: "Butter", unit: "kg", cost: 8.00, currentStock: 10 },
-    { id: "18", restaurantId: "mock", name: "Cream", unit: "l", cost: 4.50, currentStock: 5 },
-    { id: "19", restaurantId: "mock", name: "Cheddar Cheese", unit: "kg", cost: 7.00, currentStock: 15 },
-    { id: "20", restaurantId: "mock", name: "Egg", unit: "unit", cost: 0.10, currentStock: 200 },
-    { id: "21", restaurantId: "mock", name: "Beef Patty", unit: "kg", cost: 12.00, currentStock: 30 },
-    { id: "22", restaurantId: "mock", name: "Chicken Breast", unit: "kg", cost: 6.00, currentStock: 40 },
-    { id: "23", restaurantId: "mock", name: "Pork Chop", unit: "kg", cost: 8.00, currentStock: 25 },
-    { id: "24", restaurantId: "mock", name: "Bacon", unit: "kg", cost: 10.00, currentStock: 10 },
-    { id: "25", restaurantId: "mock", name: "Salmon Fillet", unit: "kg", cost: 15.00, currentStock: 5 },
-    // Staples/Dry
-    { id: "26", restaurantId: "mock", name: "Sugar", unit: "kg", cost: 1.00, currentStock: 50 },
-    { id: "27", restaurantId: "mock", name: "Salt", unit: "kg", cost: 0.50, currentStock: 30 },
-    { id: "28", restaurantId: "mock", name: "Rice", unit: "kg", cost: 1.50, currentStock: 60 },
-    { id: "29", restaurantId: "mock", name: "Pasta Penne", unit: "kg", cost: 2.00, currentStock: 40 },
-    { id: "30", restaurantId: "mock", name: "Sunflower Oil", unit: "l", cost: 3.00, currentStock: 20 },
-    { id: "31", restaurantId: "mock", name: "Balsamic Vinegar", unit: "l", cost: 5.00, currentStock: 10 },
-    { id: "32", restaurantId: "mock", name: "Yeast", unit: "kg", cost: 5.00, currentStock: 2 },
-    { id: "33", restaurantId: "mock", name: "Coffee Beans", unit: "kg", cost: 12.00, currentStock: 10 },
-    { id: "34", restaurantId: "mock", name: "Black Tea", unit: "kg", cost: 20.00, currentStock: 5 },
-    { id: "35", restaurantId: "mock", name: "Dark Chocolate", unit: "kg", cost: 9.00, currentStock: 8 },
-]
-
-// ── Suppliers ──
-
-async function fetchSuppliers(): Promise<SupplierResponse[]> {
-    const data = await apiClient<ApiGenericResponse<SupplierResponse[]>>("/suppliers")
-    if (!data.success) throw new Error(data.errorMessage || "Failed to fetch suppliers")
-    return data.data
+export interface UpdateIngredientRequest {
+    name: string
+    baseUnitId: string
 }
-
-export function useSuppliers() {
-    return useQuery({
-        queryKey: ["suppliers"],
-        queryFn: fetchSuppliers,
-        staleTime: 1000 * 60 * 5, // Cache for 5 minutes (they change rarely)
-    })
-}
-
-// ── Query Keys ──
 
 export const IngredientsKeys = {
     all: () => ["ingredients"] as const,
@@ -87,15 +34,13 @@ export const IngredientsKeys = {
     detail: (id: string) => [...IngredientsKeys.details(), id] as const,
 }
 
-// ── List (Server-Side Pagination) ──
-
 async function fetchIngredients(params: IngredientListParams): Promise<PageResponse<IngredientListResponse>> {
     const searchParams = new URLSearchParams()
     searchParams.append("page", params.page.toString())
     searchParams.append("size", params.size.toString())
     if (params.search) searchParams.append("search", params.search)
     if (params.sortBy) searchParams.append("sortBy", params.sortBy)
-    if (params.sortDesc) searchParams.append("sortDesc", params.sortDesc.toString())
+    if (params.sortDesc !== undefined) searchParams.append("sortDesc", params.sortDesc.toString())
     if (params.units) {
         params.units.forEach(unit => searchParams.append("unit", unit))
     }
@@ -115,23 +60,10 @@ export function useIngredients(params: IngredientListParams) {
     })
 }
 
-// ── Detail (mock) ──
-// TODO: Connect this to real backend endpoint /ingredients/{id} when ready
 async function fetchIngredient(ingredientId: string): Promise<IngredientDetailResponse> {
-    await new Promise(resolve => setTimeout(resolve, 500))
-    const item = MOCK_INGREDIENTS.find(i => i.id === ingredientId)
-    if (!item) throw new Error("Ingredient not found")
-
-    // Convert MockIngredient to IngredientDetailResponse
-    return {
-        id: item.id,
-        name: item.name,
-        baseUnitId: "mock-unit-id",
-        unitName: item.unit === 'kg' ? 'Kilogram' : item.unit,
-        unitAbbreviation: item.unit,
-        costPerBaseUnit: item.cost,
-        activeSupplier: null
-    }
+    const data = await apiClient<ApiGenericResponse<IngredientDetailResponse>>(`/ingredients/${ingredientId}`)
+    if (!data.success) throw new Error(data.errorMessage || "Failed to fetch ingredient")
+    return data.data
 }
 
 export function useIngredient(ingredientId: string) {
@@ -141,8 +73,6 @@ export function useIngredient(ingredientId: string) {
         enabled: !!ingredientId,
     })
 }
-
-// ── Create (REAL — calls backend POST /ingredients) ──
 
 async function createIngredient(payload: CreateIngredientRequest): Promise<IngredientResponse> {
     const data = await apiClient<ApiGenericResponse<IngredientResponse>>(
@@ -163,23 +93,40 @@ export function useCreateIngredient() {
         mutationFn: (payload: CreateIngredientRequest) => createIngredient(payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists() })
-            queryClient.invalidateQueries({ queryKey: ["suppliers"] })
+            queryClient.invalidateQueries({ queryKey: SupplierKeys.all() })
+            queryClient.invalidateQueries({ queryKey: ["inventory"] })
+            queryClient.invalidateQueries({ queryKey: ["pos-catalog"] })
         },
     })
 }
 
-// ── Stock Adjustment (mock) ──
+async function updateIngredient(ingredientId: string, payload: UpdateIngredientRequest): Promise<IngredientDetailResponse> {
+    const data = await apiClient<ApiGenericResponse<IngredientDetailResponse>>(`/ingredients/${ingredientId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+    })
+    if (!data.success) throw new Error(data.errorMessage || "Failed to update ingredient")
+    return data.data
+}
 
-// ── Delete (mock) ──
+export function useUpdateIngredient() {
+    const queryClient = useQueryClient()
 
-async function deleteIngredient(ingredientId: string) {
-    // 🚧 STILL MOCKED until backend implements it 🚧
-    await new Promise(resolve => setTimeout(resolve, 500))
-    const index = MOCK_INGREDIENTS.findIndex(i => i.id === ingredientId)
-    if (index !== -1) {
-        MOCK_INGREDIENTS.splice(index, 1)
-    }
-    return true
+    return useMutation({
+        mutationFn: ({ ingredientId, payload }: { ingredientId: string; payload: UpdateIngredientRequest }) =>
+            updateIngredient(ingredientId, payload),
+        onSuccess: (_data, variables) => {
+            queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists() })
+            queryClient.invalidateQueries({ queryKey: IngredientsKeys.detail(variables.ingredientId) })
+            queryClient.invalidateQueries({ queryKey: ["inventory"] })
+            queryClient.invalidateQueries({ queryKey: ["pos-catalog"] })
+        },
+    })
+}
+
+async function deleteIngredient(ingredientId: string): Promise<void> {
+    const data = await apiClient<ApiGenericResponse<void>>(`/ingredients/${ingredientId}`, { method: "DELETE" })
+    if (!data.success) throw new Error(data.errorMessage || "Failed to delete ingredient")
 }
 
 export function useDeleteIngredient() {
@@ -189,6 +136,8 @@ export function useDeleteIngredient() {
         mutationFn: (ingredientId: string) => deleteIngredient(ingredientId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: IngredientsKeys.lists() })
+            queryClient.invalidateQueries({ queryKey: ["inventory"] })
+            queryClient.invalidateQueries({ queryKey: ["pos-catalog"] })
         },
     })
 }

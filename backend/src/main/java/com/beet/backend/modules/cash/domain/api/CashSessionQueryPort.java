@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface CashSessionQueryPort {
     CashSessionDomain getActiveSession(UUID restaurantId, UUID deviceId);
 
+    CashSessionDomain getSessionForUpdate(UUID restaurantId, UUID sessionId);
+
     PageResponse<CashSessionSummary> listSessions(
             List<UUID> restaurantIds,
             CashSessionStatus status,

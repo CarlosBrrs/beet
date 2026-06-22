@@ -23,6 +23,7 @@ public class OrderDomain {
 
     private UUID id;
     private UUID restaurantId;
+    private UUID businessDayId;
     private UUID cashSessionId;
     private UUID originCashSessionId;
     private UUID originDeviceId;
@@ -49,6 +50,18 @@ public class OrderDomain {
     private BigDecimal taxAmountSnapshot;
     private BigDecimal totalGrossSnapshot;
     private BigDecimal tipTotalSnapshot;
+    @Builder.Default
+    private BigDecimal refundDueSnapshot = BigDecimal.ZERO;
+    @Builder.Default
+    private BigDecimal refundedTotalSnapshot = BigDecimal.ZERO;
+    @Builder.Default
+    private BigDecimal paidTotal = BigDecimal.ZERO;
+    @Builder.Default
+    private BigDecimal remainingBalance = BigDecimal.ZERO;
+    private OffsetDateTime paymentExpiresAt;
+    private OffsetDateTime paymentExpiredAt;
+    private OffsetDateTime expirationProcessedAt;
+    private Integer prepaidOrderExpirationMinutes;
     private String notes;
     private OffsetDateTime completedAt;
     private OffsetDateTime canceledAt;
@@ -70,6 +83,9 @@ public class OrderDomain {
     @Builder.Default
     private List<PaymentDomain> payments = new ArrayList<>();
 
+    @Builder.Default
+    private List<PaymentRefundDomain> refunds = new ArrayList<>();
+
     public String getOrderNumber() {
         if (businessDate == null || dailySequence == null) {
             return null;
@@ -83,5 +99,9 @@ public class OrderDomain {
             return orderNumber;
         }
         return orderNumber + "/" + publicCode;
+    }
+
+    public boolean isPaymentExpired() {
+        return paymentExpiredAt != null;
     }
 }

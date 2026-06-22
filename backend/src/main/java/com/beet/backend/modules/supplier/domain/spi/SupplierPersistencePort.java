@@ -11,5 +11,15 @@ public interface SupplierPersistencePort {
 
     Optional<SupplierDomain> findById(UUID id);
 
+    Optional<SupplierDomain> findByIdAndOwnerId(UUID id, UUID ownerId);
+
     boolean existsByOwnerAndDocument(UUID ownerId, UUID documentTypeId, String documentNumber);
+
+    boolean existsByOwnerAndDocumentExcludingId(UUID ownerId, UUID documentTypeId, String documentNumber, UUID excludedId);
+
+    boolean hasBlockingReferences(UUID supplierId);
+
+    void updateActive(UUID supplierId, UUID ownerId, boolean isActive);
+
+    void softDelete(UUID supplierId, UUID ownerId, UUID actorId);
 }

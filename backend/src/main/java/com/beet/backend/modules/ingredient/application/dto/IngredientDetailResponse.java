@@ -11,10 +11,12 @@ public record IngredientDetailResponse(
         UUID id,
         String name,
         UUID baseUnitId,
-        String unitName, // units.name e.g. "Kilogram"
-        String unitAbbreviation, // units.abbreviation e.g. "kg"
-        BigDecimal costPerBaseUnit, // null if no active supplier linked yet
-        ActiveSupplierInfo activeSupplier // null if no supplier linked yet
+        String unitName,
+        String unitAbbreviation,
+        BigDecimal costPerBaseUnit,
+        BigDecimal currentStock,
+        boolean costComplete,
+        ActiveSupplierInfo activeSupplier
 ) {
     public record ActiveSupplierInfo(
             UUID supplierId,

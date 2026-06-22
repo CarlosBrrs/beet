@@ -44,6 +44,8 @@ const createRestaurantSchema = z.object({
         allowDelivery: z.boolean(),
         maxTableCapacity: z.coerce.number<number>().int().min(1, "Capacity must be at least 1"),
         timeZone: z.string().trim().min(1, "Time zone is required"),
+        prepaidOrderExpirationMinutes: z.coerce.number<number>().int().min(5).max(1440),
+        cashCountMode: z.enum(["BLIND", "VISIBLE"]),
     })
 })
 
@@ -76,6 +78,8 @@ export default function CreateRestaurantPage() {
                 allowDelivery: true,
                 maxTableCapacity: 1,
                 timeZone: "America/Bogota",
+                prepaidOrderExpirationMinutes: 30,
+                cashCountMode: "BLIND",
             }
         },
     })
@@ -244,6 +248,46 @@ export default function CreateRestaurantPage() {
                                             </Select>
                                             <FormDescription>
                                                 Afecta numeracion diaria de ordenes, cajas, cortes y reportes.
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="settings.prepaidOrderExpirationMinutes"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Vencimiento de orden prepago</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" min={5} max={1440} {...field} />
+                                            </FormControl>
+                                            <FormDescription>
+                                                Minutos antes de liberar las reservas de una orden pendiente de pago.
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="settings.cashCountMode"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Modo de arqueo</FormLabel>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="BLIND">Ciego</SelectItem>
+                                                    <SelectItem value="VISIBLE">Visible</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <FormDescription>
+                                                En modo ciego el cajero cuenta antes de ver el efectivo esperado.
                                             </FormDescription>
                                             <FormMessage />
                                         </FormItem>

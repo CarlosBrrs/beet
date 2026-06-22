@@ -3,6 +3,7 @@ package com.beet.backend.modules.user.domain.usecase;
 import com.beet.backend.modules.user.domain.api.RegisterUserServicePort;
 import com.beet.backend.modules.user.domain.exception.UserAlreadyExistsException;
 import com.beet.backend.modules.user.domain.model.User;
+import com.beet.backend.modules.user.domain.model.UserAccountStatus;
 import com.beet.backend.modules.user.domain.spi.UserPersistencePort;
 import com.beet.backend.modules.subscription.domain.exception.SubscriptionPlanNotFoundException;
 
@@ -54,6 +55,7 @@ public class RegisterUserUseCase implements RegisterUserServicePort {
                 .phoneNumber(user.getPhoneNumber())
                 .username(user.getUsername())
                 .subscriptionPlanId(user.getSubscriptionPlanId())
+                .accountStatus(UserAccountStatus.ACTIVE)
                 .ownerId(null) // Null signifies they ARE the owner (root)
                 .build();
 

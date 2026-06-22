@@ -19,5 +19,8 @@ public record CashSessionSummary(
         UUID closedBy,
         UUID closedDeviceId,
         BigDecimal closingAmount,
+        BigDecimal expectedCash,
+        BigDecimal differenceAmount,
+        String differenceReason,
         String notes) {
 }

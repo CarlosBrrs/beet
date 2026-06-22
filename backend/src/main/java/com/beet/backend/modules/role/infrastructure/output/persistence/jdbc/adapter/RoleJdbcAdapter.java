@@ -57,20 +57,20 @@ public class RoleJdbcAdapter implements RolePersistencePort {
         boolean ownerAdded = false;
 
         // Integrity check: a user cannot have both OWNER and operative roles
-        boolean hasOwnerRole = rows.stream().anyMatch(r -> "OWNER".equals(r.roleName()));
-        boolean hasOtherRole = rows.stream().anyMatch(r -> !"OWNER".equals(r.roleName()));
+        boolean hasOwnerRole = rows.stream().anyMatch(this::isOwnerRole);
+        boolean hasOtherRole = rows.stream().anyMatch(r -> !isOwnerRole(r));
         if (hasOwnerRole && hasOtherRole) {
             throw RoleConflictException.ownerWithOperativeRoles();
         }
 
         for (UserRolePermissionProjection row : rows) {
-            // Only the OWNER role is global — it gets collapsed into a single entry with
+            // Only the OWNER role is global role; it gets collapsed into a single entry with
             // restaurantId = null.
             // All other roles (MANAGER, CASHIER, etc.) are per-restaurant even if their
             // role template
             // also has restaurant_id = NULL in the roles table (because they're
             // system-defined roles).
-            boolean isOwner = "OWNER".equals(row.roleName());
+            boolean isOwner = isOwnerRole(row);
 
             if (isOwner) {
                 if (!ownerAdded) {
@@ -90,4 +90,10 @@ public class RoleJdbcAdapter implements RolePersistencePort {
         }
         return result;
     }
+    private boolean isOwnerRole(UserRolePermissionProjection row) {
+        return "OWNER".equalsIgnoreCase(row.rolePresetKey())
+                || "OWNER".equalsIgnoreCase(row.roleName())
+                || "Owner".equalsIgnoreCase(row.roleName());
+    }
 }
+

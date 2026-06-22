@@ -1,7 +1,8 @@
-"use client"
+﻿"use client"
 
 import { useIngredient } from "@/lib/hooks/use-ingredients"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
 import { formatCurrency } from "@/lib/utils"
 
 interface IngredientDetailProps {
@@ -27,30 +28,51 @@ export function IngredientDetail({ ingredientId }: IngredientDetailProps) {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-start justify-between gap-4">
                 <div>
                     <h4 className="text-sm font-medium text-muted-foreground">Name</h4>
                     <p className="text-lg font-semibold">{ingredient.name}</p>
                 </div>
+                <Badge variant={ingredient.costComplete ? "default" : "secondary"}>
+                    {ingredient.costComplete ? "Cost complete" : "Cost incomplete"}
+                </Badge>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
                 <div>
                     <h4 className="text-sm font-medium text-muted-foreground">Current Stock</h4>
                     <p className="text-lg">
-                        {/* Waiting on backend V4 migration for currentStock */}
-                        - <span className="text-sm text-muted-foreground">{ingredient.unitAbbreviation}</span>
+                        {ingredient.currentStock ?? 0} <span className="text-sm text-muted-foreground">{ingredient.unitAbbreviation}</span>
                     </p>
+                </div>
+                <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Unit</h4>
+                    <p>{ingredient.unitName} ({ingredient.unitAbbreviation})</p>
                 </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Unit</h4>
-                    <p>{ingredient.unitName} ({ingredient.unitAbbreviation})</p>
-                </div>
-                <div>
                     <h4 className="text-sm font-medium text-muted-foreground">Cost per Base Unit</h4>
                     <p>{ingredient.costPerBaseUnit ? formatCurrency(ingredient.costPerBaseUnit) : "-"}</p>
                 </div>
+                <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Active Supplier</h4>
+                    <p>{ingredient.activeSupplier?.supplierName ?? "-"}</p>
+                </div>
             </div>
+
+            {ingredient.activeSupplier && (
+                <div className="rounded-md border p-4 text-sm">
+                    <h4 className="font-medium mb-2">Active supplier item</h4>
+                    <div className="grid grid-cols-2 gap-3 text-muted-foreground">
+                        <p>Brand: <span className="text-foreground">{ingredient.activeSupplier.brandName || "-"}</span></p>
+                        <p>Package: <span className="text-foreground">{ingredient.activeSupplier.purchaseUnitName}</span></p>
+                        <p>Conversion: <span className="text-foreground">{ingredient.activeSupplier.conversionFactor}</span></p>
+                        <p>Last cost: <span className="text-foreground">{formatCurrency(ingredient.activeSupplier.lastCostBase)}</span></p>
+                    </div>
+                </div>
+            )}
 
             <div className="pt-4 border-t">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">System Info</h4>

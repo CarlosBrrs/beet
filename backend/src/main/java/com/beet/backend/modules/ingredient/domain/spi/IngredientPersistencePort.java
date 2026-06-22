@@ -2,6 +2,7 @@ package com.beet.backend.modules.ingredient.domain.spi;
 
 import com.beet.backend.modules.ingredient.domain.model.MasterIngredientDomain;
 import com.beet.backend.modules.ingredient.domain.model.SupplierItemDomain;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface IngredientPersistencePort {
@@ -14,5 +15,15 @@ public interface IngredientPersistencePort {
 
     boolean existsByNameAndOwnerId(String name, UUID ownerId);
 
+    boolean existsByNameAndOwnerIdExcludingId(String name, UUID ownerId, UUID excludedId);
+
     boolean existsByIdAndOwnerId(UUID ingredientId, UUID ownerId);
+
+    Optional<MasterIngredientDomain> findByIdAndOwnerId(UUID ingredientId, UUID ownerId);
+
+    boolean hasBaseUnitChangeBlockers(UUID ingredientId);
+
+    boolean hasDeleteBlockers(UUID ingredientId);
+
+    void softDelete(UUID ingredientId, UUID ownerId, UUID actorId);
 }

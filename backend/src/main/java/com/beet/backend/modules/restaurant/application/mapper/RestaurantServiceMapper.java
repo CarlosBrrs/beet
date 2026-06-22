@@ -20,10 +20,10 @@ public class RestaurantServiceMapper {
                 .address(request.address())
                 .email(request.email())
                 .phoneNumber(request.phoneNumber())
-                .operationMode(OperationMode.valueOf(request.operationMode())) // String to Enum
+                .operationMode(OperationMode.valueOf(request.operationMode()))
                 .isActive(request.isActive() != null ? request.isActive() : true)
                 .ownerId(ownerId)
-                .settings(request.settings()) // Pass through
+                .settings(request.settings())
                 .build();
     }
 
@@ -34,10 +34,10 @@ public class RestaurantServiceMapper {
                 .address(domain.getAddress())
                 .email(domain.getEmail())
                 .phoneNumber(domain.getPhoneNumber())
-                .operationMode(domain.getOperationMode().name()) // Enum to String
+                .operationMode(domain.getOperationMode().name())
                 .isActive(domain.getIsActive())
                 .ownerId(domain.getOwnerId())
-                .settings(domain.getSettings()) // Pass through
+                .settings(domain.getSettings())
                 .build();
     }
 
@@ -45,6 +45,9 @@ public class RestaurantServiceMapper {
         return RestaurantResponse.builder()
                 .id(dto.id())
                 .name(dto.name())
+                .address(dto.address())
+                .email(dto.email())
+                .phoneNumber(dto.phoneNumber())
                 .operationMode(dto.operationMode().name())
                 .isActive(dto.isActive())
                 .ownerId(dto.ownerId())
@@ -53,9 +56,7 @@ public class RestaurantServiceMapper {
                 .build();
     }
 
-    public RestaurantDomain toDomain(
-            RestaurantUpdateRequest request, UUID id,
-            UUID ownerId) {
+    public RestaurantDomain toDomain(RestaurantUpdateRequest request, UUID id, UUID ownerId) {
         return RestaurantDomain.builder()
                 .id(id)
                 .ownerId(ownerId)
@@ -63,7 +64,7 @@ public class RestaurantServiceMapper {
                 .address(request.address())
                 .email(request.email())
                 .phoneNumber(request.phoneNumber())
-                .operationMode(OperationMode.valueOf(request.operationMode()))
+                .operationMode(request.operationMode() == null ? null : OperationMode.valueOf(request.operationMode()))
                 .isActive(request.isActive())
                 .settings(request.settings())
                 .build();

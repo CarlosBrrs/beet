@@ -32,6 +32,14 @@ public record OrderResponse(
         BigDecimal taxAmountSnapshot,
         BigDecimal totalGrossSnapshot,
         BigDecimal tipTotalSnapshot,
+        BigDecimal refundDueSnapshot,
+        BigDecimal refundedTotalSnapshot,
+        BigDecimal paidTotal,
+        BigDecimal remainingBalance,
+        OffsetDateTime paymentExpiresAt,
+        OffsetDateTime paymentExpiredAt,
+        boolean paymentExpired,
+        Integer prepaidOrderExpirationMinutes,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt) {
 }

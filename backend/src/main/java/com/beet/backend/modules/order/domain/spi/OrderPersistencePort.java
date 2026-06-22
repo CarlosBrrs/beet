@@ -6,17 +6,20 @@ import com.beet.backend.modules.order.domain.model.KitchenTicketDomain;
 import com.beet.backend.modules.order.domain.model.KitchenTicketStatus;
 import com.beet.backend.modules.order.domain.model.OrderDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemDomain;
+import com.beet.backend.modules.order.domain.model.OrderItemCancellationDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTaxDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemIngredientRequirementDomain;
 import com.beet.backend.modules.order.domain.model.OrderSearchCriteria;
 import com.beet.backend.modules.order.domain.model.OrderTaxDomain;
 import com.beet.backend.modules.order.domain.model.PaymentDomain;
 import com.beet.backend.modules.order.domain.model.PaymentMethodDomain;
+import com.beet.backend.modules.order.domain.model.PaymentRefundDomain;
 import com.beet.backend.modules.order.domain.model.PosCatalogEntryDomain;
 import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,18 +49,28 @@ public interface OrderPersistencePort {
 
     void deleteItem(UUID orderItemId);
 
+    OrderItemCancellationDomain applyItemCancellation(
+            OrderItemCancellationDomain cancellation,
+            BigDecimal originalQuantity,
+            BigDecimal activeSubtotal,
+            UUID userId);
+
+    void cancelEmptyKitchenTickets(UUID orderId, UUID userId);
+
     void replaceOrderTaxes(UUID orderId, List<OrderTaxDomain> taxes);
 
     void replaceOrderItemTaxes(UUID orderId, List<OrderItemTaxDomain> taxes);
 
     Optional<OrderDomain> findByIdWithItems(UUID orderId);
 
+    void lockOrder(UUID restaurantId, UUID orderId);
+
     PageResponse<OrderDomain> findAllPaged(OrderSearchCriteria criteria);
 
     PageResponse<OrderDomain> findAllPaged(UUID restaurantId, int page, int size, String search);
 
     PageResponse<PosCatalogEntryDomain> findPosCatalog(UUID restaurantId, int page, int size, String search,
-            UUID menuId, UUID submenuId, String availability, String referenceType, String sort);
+            UUID menuId, UUID submenuId, String referenceType, String sort);
 
     KitchenTicketDomain saveKitchenTicket(KitchenTicketDomain ticket);
 
@@ -75,11 +88,19 @@ public interface OrderPersistencePort {
 
     void releaseReservationsByOrderItem(UUID orderItemId, UUID userId);
 
+    void releaseReservationsByOrder(UUID orderId, UUID userId);
+
+    List<OrderDomain> lockExpiredAwaitingPayments(OffsetDateTime now, int limit);
+
     void consumeReservationsByTicket(UUID restaurantId, UUID ticketId, UUID userId);
 
     List<PaymentMethodDomain> findPaymentMethods(UUID restaurantId);
 
     PaymentMethodDomain savePaymentMethod(PaymentMethodDomain method);
+
+    boolean existsPaymentMethodCode(UUID restaurantId, String code);
+
+    int countActivePaymentMethods(UUID restaurantId);
 
     PaymentMethodDomain updatePaymentMethod(PaymentMethodDomain method);
 
@@ -87,7 +108,17 @@ public interface OrderPersistencePort {
 
     PaymentDomain savePayment(PaymentDomain payment);
 
+    Optional<PaymentDomain> findPayment(UUID restaurantId, UUID orderId, UUID paymentId);
+
     BigDecimal sumRecordedPayments(UUID orderId);
 
     BigDecimal sumRecordedTips(UUID orderId);
+
+    PaymentRefundDomain saveRefund(PaymentRefundDomain refund);
+
+    List<PaymentRefundDomain> findRefundsByOrder(UUID restaurantId, UUID orderId);
+
+    BigDecimal sumRecordedRefunds(UUID orderId);
+
+    BigDecimal sumRecordedRefundsByPayment(UUID paymentId);
 }

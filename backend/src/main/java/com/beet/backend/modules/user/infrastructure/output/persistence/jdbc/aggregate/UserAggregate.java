@@ -5,6 +5,7 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Table("users")
@@ -29,4 +30,6 @@ public class UserAggregate extends BaseAuditableAggregate {
     // Foreign Keys
     private UUID ownerId;
     private UUID subscriptionPlanId;
+    private String accountStatus;
+    private Instant lastLoginAt;
 }

@@ -1,7 +1,9 @@
 package com.beet.backend.modules.order.infrastructure.input.rest;
 
 import com.beet.backend.modules.order.application.dto.AddOrderItemRequest;
+import com.beet.backend.modules.order.application.dto.AddOrderItemsBatchRequest;
 import com.beet.backend.modules.order.application.dto.CancelOrderRequest;
+import com.beet.backend.modules.order.application.dto.CancelOrderItemRequest;
 import com.beet.backend.modules.order.application.dto.KitchenTicketStatusRequest;
 import com.beet.backend.modules.order.application.dto.OrderBillResponse;
 import com.beet.backend.modules.order.application.dto.OrderCreateRequest;
@@ -12,15 +14,19 @@ import com.beet.backend.modules.order.application.dto.PaymentMethodRequest;
 import com.beet.backend.modules.order.application.dto.PaymentMethodResponse;
 import com.beet.backend.modules.order.application.dto.PaymentRequest;
 import com.beet.backend.modules.order.application.dto.PaymentResponse;
+import com.beet.backend.modules.order.application.dto.PaymentRefundRequest;
+import com.beet.backend.modules.order.application.dto.PaymentRefundResponse;
 import com.beet.backend.modules.order.application.dto.PosCatalogResponse;
 import com.beet.backend.modules.order.application.dto.SplitBillsRequest;
 import com.beet.backend.modules.order.application.handler.OrderHandler;
+import com.beet.backend.modules.order.infrastructure.input.sse.KitchenTicketSseHub;
 import com.beet.backend.modules.order.domain.model.BillPaymentStatus;
 import com.beet.backend.modules.order.domain.model.DeliveryStatus;
 import com.beet.backend.modules.order.domain.model.KitchenStatus;
 import com.beet.backend.modules.order.domain.model.KitchenTicketStatus;
 import com.beet.backend.modules.order.domain.model.OrderStatus;
 import com.beet.backend.modules.order.domain.model.PaymentStatus;
+import com.beet.backend.modules.order.domain.model.PaymentPendingState;
 import com.beet.backend.modules.order.domain.model.ServiceType;
 import com.beet.backend.modules.role.domain.model.PermissionAction;
 import com.beet.backend.modules.role.domain.model.PermissionModule;
@@ -29,6 +35,7 @@ import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import com.beet.backend.shared.infrastructure.security.RequiresPermission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,6 +45,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -49,6 +57,7 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderHandler handler;
+    private final KitchenTicketSseHub kitchenTicketSseHub;
 
     @RequiresPermission(module = PermissionModule.ORDERS, action = PermissionAction.VIEW)
     @GetMapping("/restaurants/{restaurantId}/pos/catalog")
@@ -59,11 +68,10 @@ public class OrderController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) UUID menuId,
             @RequestParam(required = false) UUID submenuId,
-            @RequestParam(required = false) String availability,
             @RequestParam(required = false) String referenceType,
             @RequestParam(required = false) String sort) {
         return ResponseEntity.ok(handler.posCatalog(
-                restaurantId, page, size, search, menuId, submenuId, availability, referenceType, sort));
+                restaurantId, page, size, search, menuId, submenuId, referenceType, sort));
     }
 
     @RequiresPermission(module = PermissionModule.ORDERS, action = PermissionAction.CREATE)
@@ -129,10 +137,11 @@ public class OrderController {
             @RequestParam(required = false) BigDecimal minTotal,
             @RequestParam(required = false) BigDecimal maxTotal,
             @RequestParam(required = false) DeliveryStatus deliveryStatus,
+            @RequestParam(required = false) PaymentPendingState paymentPendingState,
             @RequestParam(required = false) String search) {
         return ResponseEntity.ok(handler.list(restaurantId, page, size, sort, orderStatus, paymentStatus,
                 kitchenStatus, serviceType, tableId, dateFrom, dateTo, cashSessionId, cashRegisterId, createdBy,
-                customer, paymentMethodId, minTotal, maxTotal, deliveryStatus, search));
+                customer, paymentMethodId, minTotal, maxTotal, deliveryStatus, paymentPendingState, search));
     }
 
     @RequiresPermission(module = PermissionModule.ORDERS, action = PermissionAction.VIEW)
@@ -150,6 +159,23 @@ public class OrderController {
             @PathVariable UUID orderId,
             @RequestBody AddOrderItemRequest request) {
         return ResponseEntity.ok(handler.addItem(restaurantId, orderId, request));
+    }
+
+    @RequiresPermission(module = PermissionModule.ORDERS, action = PermissionAction.EDIT)
+    @PostMapping("/restaurants/{restaurantId}/orders/{orderId}/items/batch")
+    public ResponseEntity<ApiGenericResponse<OrderDetailResponse>> addItems(
+            @PathVariable UUID restaurantId,
+            @PathVariable UUID orderId,
+            @RequestBody AddOrderItemsBatchRequest request) {
+        return ResponseEntity.ok(handler.addItems(restaurantId, orderId, request));
+    }
+
+    @RequiresPermission(module = PermissionModule.ORDERS, action = PermissionAction.EDIT)
+    @PostMapping("/restaurants/{restaurantId}/orders/{orderId}/payment-reactivation")
+    public ResponseEntity<ApiGenericResponse<OrderDetailResponse>> reactivatePayment(
+            @PathVariable UUID restaurantId,
+            @PathVariable UUID orderId) {
+        return ResponseEntity.ok(handler.reactivatePayment(restaurantId, orderId));
     }
 
     @RequiresPermission(module = PermissionModule.ORDERS, action = PermissionAction.EDIT)
@@ -171,6 +197,21 @@ public class OrderController {
         return ResponseEntity.ok(handler.removeItem(restaurantId, orderId, orderItemId));
     }
 
+    @RequiresPermission(module = PermissionModule.ORDERS, action = PermissionAction.EDIT)
+    @PostMapping("/restaurants/{restaurantId}/orders/{orderId}/items/{orderItemId}/cancel")
+    public ResponseEntity<ApiGenericResponse<OrderDetailResponse>> cancelItem(
+            @PathVariable UUID restaurantId,
+            @PathVariable UUID orderId,
+            @PathVariable UUID orderItemId,
+            @RequestBody CancelOrderItemRequest request) {
+        return ResponseEntity.ok(handler.cancelItem(restaurantId, orderId, orderItemId, request));
+    }
+
+    @RequiresPermission(module = PermissionModule.KDS, action = PermissionAction.VIEW)
+    @GetMapping(value = "/restaurants/{restaurantId}/kitchen-tickets/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamKitchenTickets(@PathVariable UUID restaurantId) {
+        return kitchenTicketSseHub.subscribe(restaurantId);
+    }
     @RequiresPermission(module = PermissionModule.KDS, action = PermissionAction.VIEW)
     @GetMapping("/restaurants/{restaurantId}/kitchen-tickets")
     public ResponseEntity<ApiGenericResponse<PageResponse<OrderDetailResponse.KitchenTicketResponse>>> listKitchenTickets(
@@ -221,6 +262,23 @@ public class OrderController {
             @PathVariable UUID orderId,
             @RequestBody PaymentRequest request) {
         return ResponseEntity.ok(handler.registerPayment(restaurantId, orderId, request));
+    }
+
+    @RequiresPermission(module = PermissionModule.PAYMENTS, action = PermissionAction.VIEW)
+    @GetMapping("/restaurants/{restaurantId}/orders/{orderId}/refunds")
+    public ResponseEntity<ApiGenericResponse<List<PaymentRefundResponse>>> listRefunds(
+            @PathVariable UUID restaurantId,
+            @PathVariable UUID orderId) {
+        return ResponseEntity.ok(handler.listRefunds(restaurantId, orderId));
+    }
+
+    @RequiresPermission(module = PermissionModule.PAYMENTS, action = PermissionAction.CREATE)
+    @PostMapping("/restaurants/{restaurantId}/orders/{orderId}/refunds")
+    public ResponseEntity<ApiGenericResponse<PaymentRefundResponse>> registerRefund(
+            @PathVariable UUID restaurantId,
+            @PathVariable UUID orderId,
+            @RequestBody PaymentRefundRequest request) {
+        return ResponseEntity.ok(handler.registerRefund(restaurantId, orderId, request));
     }
 
     @RequiresPermission(module = PermissionModule.PAYMENTS, action = PermissionAction.CREATE)

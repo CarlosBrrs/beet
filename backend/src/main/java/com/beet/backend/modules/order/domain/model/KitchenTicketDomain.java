@@ -25,6 +25,7 @@ public class KitchenTicketDomain {
     private LocalDate orderBusinessDate;
     private Integer orderDailySequence;
     private String orderPublicCode;
+    private String customerName;
     private KitchenTicketStatus status;
     private OffsetDateTime sentAt;
     private UUID sentBy;

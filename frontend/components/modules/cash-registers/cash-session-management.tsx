@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronLeft, ChevronRight, Loader2, ShieldAlert } from "lucide-react"
+import { ChevronLeft, ChevronRight, Eye, Loader2, ShieldAlert } from "lucide-react"
 import { useState } from "react"
 
 import { useRestaurantContext } from "@/components/providers/restaurant-provider"
@@ -31,6 +31,7 @@ import { useCashSessionList } from "@/lib/hooks/use-cash-sessions"
 import { useMyRestaurants } from "@/lib/hooks/use-my-restaurants"
 
 import { ForceCloseCashSessionDialog } from "./force-close-cash-session-dialog"
+import { ReconciliationDialog } from "./reconciliation-dialog"
 
 const ALL = "ALL"
 
@@ -84,6 +85,7 @@ function CashSessionManagement({
     const [restaurantFilter, setRestaurantFilter] = useState(ALL)
     const [registerFilter, setRegisterFilter] = useState(ALL)
     const [forceCloseTarget, setForceCloseTarget] = useState<CashSessionListResponse | null>(null)
+    const [reconciliationTarget, setReconciliationTarget] = useState<CashSessionListResponse | null>(null)
 
     const { data, isLoading, isError, error } = useCashSessionList({
         scope,
@@ -174,8 +176,9 @@ function CashSessionManagement({
                             <SessionTable
                                 sessions={sessions}
                                 showRestaurant={scope === "account"}
-                                showActions={tab === "open"}
+                                showForceClose={tab === "open"}
                                 onForceClose={setForceCloseTarget}
+                                onViewReconciliation={setReconciliationTarget}
                             />
                         )}
                     </TabsContent>
@@ -226,6 +229,13 @@ function CashSessionManagement({
                     if (!open) setForceCloseTarget(null)
                 }}
             />
+            <ReconciliationDialog
+                session={reconciliationTarget}
+                open={!!reconciliationTarget}
+                onOpenChange={(open) => {
+                    if (!open) setReconciliationTarget(null)
+                }}
+            />
         </>
     )
 }
@@ -233,15 +243,17 @@ function CashSessionManagement({
 function SessionTable({
     sessions,
     showRestaurant,
-    showActions,
+    showForceClose,
     onForceClose,
+    onViewReconciliation,
 }: {
     sessions: CashSessionListResponse[]
     showRestaurant: boolean
-    showActions: boolean
+    showForceClose: boolean
     onForceClose: (session: CashSessionListResponse) => void
+    onViewReconciliation: (session: CashSessionListResponse) => void
 }) {
-    const columnCount = 6 + Number(showRestaurant) + Number(showActions)
+    const columnCount = 9 + Number(showRestaurant)
 
     return (
         <div className="border">
@@ -255,7 +267,9 @@ function SessionTable({
                         <TableHead>Opening amount</TableHead>
                         <TableHead>Closed</TableHead>
                         <TableHead>Closing amount</TableHead>
-                        {showActions && <TableHead />}
+                        <TableHead>Expected</TableHead>
+                        <TableHead>Difference</TableHead>
+                        <TableHead />
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -283,8 +297,36 @@ function SessionTable({
                             <TableCell>
                                 {session.closingAmount === null ? "-" : formatCurrency(Number(session.closingAmount))}
                             </TableCell>
-                            {showActions && (
-                                <TableCell className="text-right">
+                            <TableCell>
+                                {session.expectedCash === null ? "-" : formatCurrency(Number(session.expectedCash))}
+                            </TableCell>
+                            <TableCell>
+                                {session.differenceAmount === null
+                                    ? "-"
+                                    : (
+                                        <div>
+                                            <span className={Number(session.differenceAmount) === 0 ? "" : "text-destructive"}>
+                                                {formatCurrency(Number(session.differenceAmount))}
+                                            </span>
+                                            {session.differenceReason && (
+                                                <p className="max-w-48 truncate text-xs text-muted-foreground">
+                                                    {session.differenceReason}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Ver arqueo"
+                                        onClick={() => onViewReconciliation(session)}
+                                    >
+                                        <Eye className="h-4 w-4" />
+                                    </Button>
+                                    {showForceClose && (
                                     <Can I="MANAGE" a="CASH" restaurantId={session.restaurantId}>
                                         <Button
                                             variant="ghost"
@@ -295,8 +337,9 @@ function SessionTable({
                                             <ShieldAlert className="h-4 w-4" />
                                         </Button>
                                     </Can>
-                                </TableCell>
-                            )}
+                                    )}
+                                </div>
+                            </TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

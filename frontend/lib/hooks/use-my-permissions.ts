@@ -19,7 +19,8 @@ async function fetchMyPermissions(): Promise<UserPermissionEntry[]> {
  * Global hook that fetches all permission scopes for the current user.
  *
  * Returns ALL assignments (one for global roles like OWNER, one per restaurant for local roles).
- * The data is cached for the entire session since permissions don't change during a session.
+ * Permissions can change while another manager edits staff, so they are refreshed
+ * periodically and when the window regains focus.
  *
  * Usage:
  *   const { can } = useMyPermissions()
@@ -30,8 +31,9 @@ export function useMyPermissions() {
     const query = useQuery({
         queryKey: MY_PERMISSIONS_KEY,
         queryFn: fetchMyPermissions,
-        staleTime: Infinity,  // permissions don't change during a session
-        gcTime: Infinity,
+        staleTime: 60_000,
+        gcTime: 10 * 60_000,
+        refetchOnWindowFocus: true,
         retry: 1,
     })
 
@@ -61,6 +63,7 @@ export function useMyPermissions() {
             const actions = entry.permissions[moduleName as PermissionModule]
             if (!actions) return false
             if ((actions as string[]).includes("ALL")) return true
+            if ((actions as string[]).includes("MANAGE")) return true
             return actions.includes(action as PermissionAction)
         }
 

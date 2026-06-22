@@ -27,6 +27,7 @@ public class UserRolePermissionRowMapper implements RowMapper<UserRolePermission
         UUID roleTemplateRestaurantId = roleRestaurantIdStr != null ? UUID.fromString(roleRestaurantIdStr) : null;
 
         String roleName = rs.getString("role_name");
+        String rolePresetKey = rs.getString("role_preset_key");
 
         Permissions permissions;
         try {
@@ -36,6 +37,6 @@ public class UserRolePermissionRowMapper implements RowMapper<UserRolePermission
             throw new SQLException("Failed to parse permissions JSON for role: " + roleName, e);
         }
 
-        return new UserRolePermissionProjection(urrRestaurantId, roleName, roleTemplateRestaurantId, permissions);
+        return new UserRolePermissionProjection(urrRestaurantId, roleName, rolePresetKey, roleTemplateRestaurantId, permissions);
     }
 }

@@ -3,6 +3,9 @@ package com.beet.backend.modules.cash.domain.usecase;
 import com.beet.backend.modules.cash.domain.model.CashRegisterDomain;
 import com.beet.backend.modules.cash.domain.model.CashSessionDomain;
 import com.beet.backend.modules.cash.domain.model.CashSessionStatus;
+import com.beet.backend.modules.cash.domain.model.RestaurantBusinessDayDomain;
+import com.beet.backend.modules.cash.domain.api.BusinessDayQueryPort;
+import com.beet.backend.modules.cash.domain.api.CashOperationsServicePort;
 import com.beet.backend.modules.cash.domain.spi.CashRegisterPersistencePort;
 import com.beet.backend.modules.cash.domain.spi.CashSessionPersistencePort;
 import com.beet.backend.shared.domain.exception.AccessDeniedException;
@@ -33,6 +36,12 @@ class CashSessionUseCaseTest {
     @Mock
     private CashSessionPersistencePort sessionPersistencePort;
 
+    @Mock
+    private BusinessDayQueryPort businessDayQuery;
+
+    @Mock
+    private CashOperationsServicePort cashOperationsService;
+
     @InjectMocks
     private CashSessionUseCase useCase;
 
@@ -49,6 +58,8 @@ class CashSessionUseCaseTest {
                 .build();
 
         when(registerPersistencePort.findRegisterByIdForUpdate(registerId)).thenReturn(Optional.of(register));
+        when(businessDayQuery.requireOpenBusinessDay(restaurantId))
+                .thenReturn(RestaurantBusinessDayDomain.builder().id(UUID.randomUUID()).build());
         when(sessionPersistencePort.findOpenByRegisterId(registerId)).thenReturn(Optional.empty());
         when(sessionPersistencePort.findOpenByRestaurantAndDevice(restaurantId, deviceId))
                 .thenReturn(Optional.empty());

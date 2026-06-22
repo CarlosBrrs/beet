@@ -37,7 +37,8 @@ export function ForceCloseCashSessionDialog({
     const form = useForm<CloseCashSessionFormValues>({
         resolver: zodResolver(closeCashSessionSchema),
         defaultValues: {
-            closingAmount: "",
+            countedCash: "",
+            differenceReason: "",
             notes: "",
         },
     })
@@ -54,7 +55,8 @@ export function ForceCloseCashSessionDialog({
                 restaurantId: session.restaurantId,
                 sessionId: session.id,
                 request: {
-                    closingAmount: parsePriceInput(values.closingAmount),
+                    countedCash: parsePriceInput(values.countedCash),
+                    differenceReason: values.differenceReason.trim() || undefined,
                     notes: values.notes.trim() || undefined,
                 },
             },
@@ -75,10 +77,10 @@ export function ForceCloseCashSessionDialog({
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
                     <FormField
                         control={form.control}
-                        name="closingAmount"
+                        name="countedCash"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Closing amount</FormLabel>
+                                <FormLabel>Efectivo contado</FormLabel>
                                 <FormControl>
                                     <Input
                                         inputMode="decimal"
@@ -88,6 +90,23 @@ export function ForceCloseCashSessionDialog({
                                             field.onBlur()
                                             field.onChange(formatPriceDisplay(event.target.value))
                                         }}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="differenceReason"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Explicacion de diferencia</FormLabel>
+                                <FormControl>
+                                    <Textarea
+                                        placeholder="Obligatoria cuando el conteo no coincide"
+                                        className="resize-none"
+                                        {...field}
                                     />
                                 </FormControl>
                                 <FormMessage />

@@ -24,5 +24,6 @@ public record OrderSearchCriteria(
         BigDecimal minTotal,
         BigDecimal maxTotal,
         DeliveryStatus deliveryStatus,
+        PaymentPendingState paymentPendingState,
         String search) {
 }

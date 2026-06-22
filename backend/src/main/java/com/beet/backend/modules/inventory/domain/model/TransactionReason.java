@@ -17,5 +17,6 @@ public enum TransactionReason {
     WASTE,
     CORRECTION,
     PURCHASE,
-    SALE
+    SALE,
+    SALE_REVERSAL
 }

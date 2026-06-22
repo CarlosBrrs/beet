@@ -2,6 +2,7 @@ package com.beet.backend.modules.user.domain.spi;
 
 import com.beet.backend.modules.user.domain.model.User;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,4 +20,6 @@ public interface UserPersistencePort {
     boolean existsByPhoneNumber(String phoneNumber);
 
     boolean existsSubscriptionPlan(UUID subscriptionPlanId);
+
+    void updateLastLoginAt(UUID userId, Instant lastLoginAt);
 }

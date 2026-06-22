@@ -18,6 +18,7 @@ import java.util.UUID;
 public class CashSessionDomain {
     private UUID id;
     private UUID restaurantId;
+    private UUID businessDayId;
     private UUID cashRegisterId;
     private CashSessionStatus status;
     private OffsetDateTime openedAt;

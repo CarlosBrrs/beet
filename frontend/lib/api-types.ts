@@ -103,6 +103,78 @@ export interface UserPermissionEntry {
     permissions: PermissionMap;
 }
 
+export type StaffAccountStatus = "ACTIVE" | "SUSPENDED";
+export type StaffAssignmentStatus = "ACTIVE" | "SUSPENDED" | "REMOVED";
+export type StaffInvitationStatus = "PENDING" | "EXPIRED" | "ACCEPTED" | "REVOKED";
+
+export interface PermissionCatalogResponse {
+    module: string;
+    label: string;
+    actions: string[];
+}
+
+export interface StaffRoleResponse {
+    id: string;
+    name: string;
+    permissions: PermissionMap;
+    presetKey: string | null;
+    active: boolean;
+    assignedUsers: number;
+}
+
+
+export interface StaffAssignment {
+    restaurantId: string;
+    restaurantName: string;
+    roleId: string;
+    roleName: string;
+    assignmentStatus: StaffAssignmentStatus;
+}
+
+export interface StaffMemberResponse {
+    userId: string;
+    email: string;
+    fullName: string;
+    accountStatus: StaffAccountStatus;
+    lastLoginAt: string | null;
+    assignments: StaffAssignment[];
+}
+
+export interface StaffInvitationResponse {
+    id: string;
+    restaurantId: string;
+    restaurantName: string;
+    roleId: string;
+    roleName: string;
+    email: string;
+    status: StaffInvitationStatus;
+    expiresAt: string;
+    acceptedAt: string | null;
+    revokedAt: string | null;
+    invitationPath: string | null;
+    createdAt: string;
+}
+
+export interface StaffInvitationRequest {
+    email: string;
+    roleId: string;
+}
+
+export interface StaffAssignmentRequest {
+    roleId?: string;
+    status: Exclude<StaffAssignmentStatus, "REMOVED">;
+}
+
+export interface AcceptStaffInvitationRequest {
+    firstName: string;
+    secondName?: string;
+    firstLastname: string;
+    secondLastname?: string;
+    phoneNumber?: string;
+    username?: string;
+    password: string;
+}
+
 /** @deprecated Use UserPermissionEntry from /auth/my-permissions instead */
 export interface UserRestaurantPermissions {
     restaurantId: string;
@@ -122,7 +194,177 @@ export interface RestaurantSettings {
     maxTableCapacity: number;
     taxApplyMode: 'PER_INVOICE' | 'PER_ITEM';
     defaultTaxPercentage: number;
-    timeZone?: string;
+    timeZone: string;
+    prepaidOrderExpirationMinutes: number;
+    cashCountMode: "BLIND" | "VISIBLE";
+}
+
+export interface ReportServiceTypeTotal {
+    serviceType: string
+    orderCount: number
+    grossSales: number
+}
+
+export interface ReportOverview {
+    dateFrom: string
+    dateTo: string
+    provisional: boolean
+    grossSales: number
+    completedSales: number
+    openOrderValue: number
+    completedOrders: number
+    averageTicket: number
+    collected: number
+    tips: number
+    refunds: number
+    netCollected: number
+    serviceTypes: ReportServiceTypeTotal[]
+    restaurants: Array<{
+        restaurantId: string
+        restaurantName: string
+        grossSales: number
+        collected: number
+        completedOrders: number
+    }>
+}
+
+export interface ReportSeriesPoint {
+    period: string
+    grossSales: number
+    completedSales: number
+    collected: number
+    refunds: number
+    orderCount: number
+}
+
+export interface SalesSeriesReport {
+    provisional: boolean
+    points: ReportSeriesPoint[]
+}
+
+export interface PaymentMethodReportRow {
+    restaurantId: string
+    restaurantName: string
+    paymentMethodId: string
+    methodCode: string
+    methodName: string
+    methodType: string
+    paymentCount: number
+    collected: number
+    tips: number
+    refunds: number
+    netCollected: number
+}
+
+export interface BusinessDayReportRow {
+    id: string
+    restaurantId: string
+    restaurantName: string
+    businessDate: string
+    timeZone: string
+    status: "OPEN" | "CLOSED"
+    provisional: boolean
+    closureSequence: number
+    paymentsTotal: number
+    tipsTotal: number
+    refundsTotal: number
+    expectedCash: number | null
+    countedCash: number | null
+    difference: number | null
+    openedAt: string
+    closedAt: string | null
+}
+
+export interface BusinessDayDetailReport {
+    id: string
+    restaurantId: string
+    restaurantName: string
+    businessDate: string
+    timeZone: string
+    status: "OPEN" | "CLOSED"
+    provisional: boolean
+    events: Array<{
+        type: string
+        reason: string | null
+        occurredAt: string
+        occurredBy: string
+    }>
+    closures: Array<{
+        id: string
+        sequence: number
+        payments: number
+        tips: number
+        refunds: number
+        cashIn: number
+        cashOut: number
+        expectedCash: number
+        countedCash: number
+        difference: number
+        notes: string | null
+        closedAt: string
+    }>
+    sessions: Array<{
+        id: string
+        registerName: string
+        status: string
+        openingAmount: number
+        expectedCash: number | null
+        countedCash: number | null
+        difference: number | null
+        differenceReason: string | null
+        openedAt: string
+        closedAt: string | null
+    }>
+}
+
+export interface CatalogReportRow {
+    restaurantId: string
+    restaurantName: string
+    referenceId: string
+    name: string
+    lineType: "PRODUCT" | "TEMPLATE"
+    soldQuantity: number
+    canceledQuantity: number
+    grossSales: number
+    theoreticalCost: number | null
+    theoreticalMargin: number | null
+    costComplete: boolean
+    optionBreakdown: string | null
+}
+
+export interface InventoryConsumptionReportRow {
+    restaurantId: string
+    restaurantName: string
+    ingredientId: string
+    ingredientName: string
+    quantityBase: number
+    historicalCost: number | null
+    costComplete: boolean
+}
+
+export interface MissingCostIngredient {
+    restaurantId: string
+    restaurantName: string
+    ingredientId: string
+    ingredientName: string
+    currentStock: number
+}
+
+export interface InventoryValuationReport {
+    knownValue: number
+    valuedIngredientCount: number
+    missingCostIngredientCount: number
+    missingCostIngredients: MissingCostIngredient[]
+}
+
+export interface LowStockReportRow {
+    restaurantId: string
+    restaurantName: string
+    ingredientId: string
+    ingredientName: string
+    currentStock: number
+    minStock: number
+    shortage: number
 }
 
 export interface RestaurantRequest {
@@ -131,12 +373,26 @@ export interface RestaurantRequest {
     email?: string;
     phoneNumber?: string;
     operationMode: 'PREPAID' | 'POSTPAID';
+    isActive?: boolean;
     settings: RestaurantSettings;
+}
+
+export interface RestaurantUpdateRequest {
+    name?: string;
+    address?: string;
+    email?: string;
+    phoneNumber?: string;
+    operationMode?: 'PREPAID' | 'POSTPAID';
+    isActive?: boolean;
+    settings?: Partial<RestaurantSettings>;
 }
 
 export type RestaurantResponse = {
     id: string;
     name: string;
+    address?: string | null;
+    email?: string | null;
+    phoneNumber?: string | null;
     operationMode: 'PREPAID' | 'POSTPAID';
     isActive: boolean;
     ownerId: string;
@@ -193,13 +449,115 @@ export interface OpenCashSessionRequest {
 }
 
 export interface CloseCashSessionRequest {
-    closingAmount: number;
+    countedCash: number;
+    differenceReason?: string;
     notes?: string;
 }
 
 export interface CashSessionListResponse extends CashSessionResponse {
     restaurantName: string;
     cashRegisterName: string;
+    expectedCash: number | null;
+    differenceAmount: number | null;
+    differenceReason: string | null;
+}
+
+export type BusinessDayStatus = "OPEN" | "CLOSED";
+
+export interface BusinessDayResponse {
+    id: string;
+    restaurantId: string;
+    businessDate: string;
+    timeZone: string;
+    status: BusinessDayStatus;
+    openedAt: string;
+    openedBy: string;
+    closedAt: string | null;
+    closedBy: string | null;
+    openSessionCount: number;
+    pendingOrderCount: number;
+    missingReconciliationCount: number;
+    unexplainedDifferenceCount: number;
+}
+
+export type CashMovementDirection = "IN" | "OUT";
+export type CashMovementReason = "CHANGE_FUND" | "SAFE_DROP" | "PETTY_EXPENSE" | "CORRECTION" | "OTHER";
+export type CashMovementStatus = "RECORDED" | "VOIDED";
+
+export interface CashMovementRequest {
+    direction: CashMovementDirection;
+    reason: CashMovementReason;
+    amount: number;
+    notes?: string;
+}
+
+export interface CashMovementResponse extends CashMovementRequest {
+    id: string;
+    restaurantId: string;
+    businessDayId: string;
+    cashSessionId: string;
+    status: CashMovementStatus;
+    createdAt: string;
+    createdBy: string;
+    createdDeviceId: string;
+    voidedAt: string | null;
+    voidedBy: string | null;
+    voidReason: string | null;
+}
+
+export interface PaymentTotalResponse {
+    paymentMethodId: string | null;
+    methodCode: string;
+    methodName: string;
+    methodType: PaymentMethodType;
+    paymentCount: number;
+    paymentAmount: number;
+    tipAmount: number;
+    refundAmount: number;
+    netAmount: number;
+}
+
+export interface CashSessionReconciliationResponse {
+    id: string | null;
+    restaurantId: string;
+    businessDayId: string;
+    cashSessionId: string;
+    openingAmount: number;
+    paymentsTotal: number | null;
+    tipsTotal: number | null;
+    refundsTotal: number | null;
+    cashInTotal: number | null;
+    cashOutTotal: number | null;
+    expectedCash: number | null;
+    countedCash: number | null;
+    differenceAmount: number | null;
+    differenceReason: string | null;
+    notes: string | null;
+    closedAt: string | null;
+    closedBy: string | null;
+    closedDeviceId: string | null;
+    blind: boolean;
+    closed: boolean;
+    paymentTotals: PaymentTotalResponse[];
+}
+
+export interface BusinessDayClosureResponse {
+    id: string;
+    restaurantId: string;
+    businessDayId: string;
+    closureSequence: number;
+    paymentsTotal: number;
+    tipsTotal: number;
+    refundsTotal: number;
+    cashInTotal: number;
+    cashOutTotal: number;
+    expectedCashTotal: number;
+    countedCashTotal: number;
+    differenceTotal: number;
+    notes: string | null;
+    closedAt: string;
+    closedBy: string;
+    paymentTotals: PaymentTotalResponse[];
 }
 
 // ── Mock Ingredient types (used by list, detail, delete, adjust — still mocked) ──
@@ -328,7 +686,7 @@ export interface ActiveSupplierInfo {
     supplierId: string;
     supplierName: string;
     supplierItemId: string;
-    brandName: string;
+    brandName: string | null;
     purchaseUnitName: string;
     conversionFactor: number;
     lastCostBase: number;
@@ -341,6 +699,8 @@ export interface IngredientDetailResponse {
     unitName: string;
     unitAbbreviation: string;
     costPerBaseUnit: number | null;
+    currentStock: number;
+    costComplete: boolean;
     activeSupplier: ActiveSupplierInfo | null;
 }
 
@@ -351,10 +711,10 @@ export interface SupplierResponse {
     name: string;
     documentTypeId: string;
     documentNumber: string;
-    contactName: string;
-    email: string;
-    phone: string;
-    address: string;
+    contactName: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
     isActive: boolean;
 }
 
@@ -695,15 +1055,18 @@ export interface SubmenuNodeResponse {
 export type OrderStatus = "DRAFT" | "AWAITING_PAYMENT" | "OPEN" | "COMPLETED" | "CANCELED";
 export type KitchenStatus = "NOT_SENT" | "PENDING" | "PREPARING" | "PARTIALLY_READY" | "READY" | "ACCEPTED" | "SERVED";
 export type KitchenTicketStatus = "PENDING" | "PREPARING" | "READY" | "CANCELED";
-export type PaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID" | "REFUNDED";
+export type PaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID" | "REFUND_PENDING" | "REFUNDED";
 export type ServiceType = "DINE_IN" | "TAKEOUT" | "DELIVERY";
 export type DeliveryStatus = "NOT_APPLICABLE" | "PENDING_DISPATCH" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELED";
 export type OrderLineType = "PRODUCT" | "TEMPLATE";
 export type CatalogReferenceType = "PRODUCT" | "TEMPLATE";
 export type PaymentMethodType = "CASH" | "DEBIT_CARD" | "CREDIT_CARD" | "NEQUI" | "DAVIPLATA" | "INTERNAL_CREDIT" | "OTHER";
 export type PaymentRecordStatus = "RECORDED" | "VOIDED" | "REFUNDED";
+export type PaymentRefundStatus = "RECORDED" | "VOIDED";
+export type OrderItemInventoryDisposition = "RELEASE_RESERVED" | "NO_RESTOCK" | "RESTOCK" | "WASTE";
 export type BillPaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
 export type BillSplitMode = "ITEM_QUANTITY" | "AMOUNT" | "PERCENTAGE" | "EVENLY";
+export type PaymentPendingState = "ACTIVE" | "EXPIRED";
 
 export interface PosTemplateOptionResponse {
     slotOptionId: string;
@@ -805,8 +1168,36 @@ export interface OrderResponse {
     taxAmountSnapshot: number;
     totalGrossSnapshot: number;
     tipTotalSnapshot: number;
+    refundDueSnapshot: number;
+    refundedTotalSnapshot: number;
+    paidTotal: number;
+    remainingBalance: number;
+    paymentExpiresAt: string | null;
+    paymentExpiredAt: string | null;
+    paymentExpired: boolean;
+    prepaidOrderExpirationMinutes: number;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface TemplateOptionSnapshotResponse {
+    id: string;
+    slotOptionId: string;
+    itemId: string;
+    itemNameSnapshot: string;
+    quantity: number;
+    surchargeSnapshot: number;
+    theoreticalCostSnapshot: number | null;
+}
+
+export interface TemplateSlotSnapshotResponse {
+    id: string;
+    templateSlotId: string;
+    slotNameSnapshot: string;
+    minSelectionSnapshot: number;
+    maxSelectionSnapshot: number;
+    sortOrder: number;
+    options: TemplateOptionSnapshotResponse[];
 }
 
 export interface OrderItemDetailResponse {
@@ -819,34 +1210,37 @@ export interface OrderItemDetailResponse {
     unitPriceSnapshot: number;
     theoreticalCostSnapshot: number | null;
     quantity: number;
+    canceledQuantity: number;
+    activeQuantity: number;
     subtotalGrossSnapshot: number;
     notes: string | null;
-    templateSlots: {
-        id: string;
-        templateSlotId: string;
-        slotNameSnapshot: string;
-        minSelectionSnapshot: number;
-        maxSelectionSnapshot: number;
-        sortOrder: number;
-        options: {
-            id: string;
-            slotOptionId: string;
-            itemId: string;
-            itemNameSnapshot: string;
-            quantity: number;
-            surchargeSnapshot: number;
-            theoreticalCostSnapshot: number | null;
-        }[];
-    }[];
+    templateSlots: TemplateSlotSnapshotResponse[];
     taxes: unknown[];
+    cancellations: OrderItemCancellationResponse[];
+}
+
+export interface OrderItemCancellationResponse {
+    id: string;
+    quantity: number;
+    grossAmount: number;
+    reason: string;
+    kitchenStatusSnapshot: KitchenStatus;
+    inventoryDisposition: OrderItemInventoryDisposition;
+    createdAt: string;
+    createdBy: string | null;
+    systemGenerated: boolean;
 }
 
 export interface KitchenTicketLineResponse {
     id: string;
     orderItemId: string;
+    lineType: OrderLineType;
     quantity: number;
+    canceledQuantity: number;
+    activeQuantity: number;
     itemNameSnapshot: string;
     notes: string | null;
+    templateSlots: TemplateSlotSnapshotResponse[];
 }
 
 export interface KitchenTicketResponse {
@@ -855,6 +1249,7 @@ export interface KitchenTicketResponse {
     orderNumber: string | null;
     orderPublicCode: string | null;
     orderDisplayCode: string | null;
+    customerName: string | null;
     status: KitchenTicketStatus;
     sentAt: string;
     startedAt: string | null;
@@ -863,6 +1258,17 @@ export interface KitchenTicketResponse {
     lines: KitchenTicketLineResponse[];
 }
 
+
+export interface KitchenTicketStreamEvent {
+    eventType: "kitchen.ticket.created" | "kitchen.ticket.updated" | "kitchen.ticket.status_changed";
+    restaurantId: string;
+    ticketId: string;
+    orderId: string;
+    orderDisplayCode: string | null;
+    customerName: string | null;
+    status: KitchenTicketStatus;
+    occurredAt: string;
+}
 export interface OrderPaymentResponse {
     id: string;
     paymentMethodId: string;
@@ -890,6 +1296,18 @@ export interface OrderDetailResponse extends OrderResponse {
     taxes: unknown[];
     kitchenTickets: KitchenTicketResponse[];
     payments: OrderPaymentResponse[];
+    refunds: OrderRefundResponse[];
+}
+
+export interface OrderRefundResponse {
+    id: string;
+    paymentId: string;
+    cashSessionId: string;
+    amount: number;
+    status: PaymentRefundStatus;
+    reason: string;
+    externalReference: string | null;
+    createdAt: string;
 }
 
 export interface PaymentMethodResponse {
@@ -938,6 +1356,40 @@ export interface PaymentResponse {
     createdAt: string;
 }
 
+export interface CancelOrderItemRequest {
+    quantity: number;
+    reason: string;
+    inventoryDisposition?: OrderItemInventoryDisposition;
+}
+
+export interface CancelOrderRequest {
+    reason: string;
+    lineDecisions: {
+        orderItemId: string;
+        inventoryDisposition?: OrderItemInventoryDisposition;
+    }[];
+}
+
+export interface PaymentRefundRequest {
+    paymentId: string;
+    amount: number;
+    reason: string;
+    reference?: string;
+}
+
+export interface PaymentRefundResponse {
+    id: string;
+    restaurantId: string;
+    orderId: string;
+    paymentId: string;
+    cashSessionId: string;
+    amount: number;
+    status: PaymentRefundStatus;
+    reason: string;
+    externalReference: string | null;
+    createdAt: string;
+}
+
 export interface SplitBillsRequest {
     mode: BillSplitMode;
     bills: {
@@ -966,4 +1418,9 @@ export interface OrderBillResponse {
         amount: number;
     }[];
 }
+
+
+
+
+
 

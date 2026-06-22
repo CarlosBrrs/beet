@@ -13,14 +13,22 @@ import java.util.UUID;
 
 public interface RoleJdbcRepository extends ListCrudRepository<RoleAggregate, UUID> {
 
-        @Query("SELECT id FROM roles WHERE LOWER(name) = LOWER(:name)")
+        @Query("SELECT id FROM roles WHERE (LOWER(name) = LOWER(:name) OR preset_key = UPPER(:name)) AND deleted_at IS NULL ORDER BY restaurant_id NULLS FIRST LIMIT 1")
         Optional<UUID> findIdByName(String name);
 
-        @Query("SELECT COUNT(*) > 0 FROM user_restaurant_roles WHERE user_id = :userId AND restaurant_id = :restaurantId AND role_id = :roleId")
+        @Query("""
+                        SELECT COUNT(*) > 0
+                        FROM user_restaurant_roles
+                        WHERE user_id = :userId
+                          AND restaurant_id = :restaurantId
+                          AND role_id = :roleId
+                          AND assignment_status = 'ACTIVE'
+                          AND deleted_at IS NULL
+                        """)
         boolean existsByUserIdAndRestaurantIdAndRoleId(UUID userId, UUID restaurantId, UUID roleId);
 
         @Modifying
-        @Query("INSERT INTO user_restaurant_roles (user_id, restaurant_id, role_id, created_by, updated_by) VALUES (:userId, :restaurantId, :roleId, :senderId, :senderId)")
+        @Query("INSERT INTO user_restaurant_roles (user_id, restaurant_id, role_id, assignment_status, created_by, updated_by) VALUES (:userId, :restaurantId, :roleId, 'ACTIVE', :senderId, :senderId)")
         void assignRoleToUser(UUID userId, UUID restaurantId, UUID roleId, UUID senderId);
 
         @Query(value = """
@@ -28,6 +36,10 @@ public interface RoleJdbcRepository extends ListCrudRepository<RoleAggregate, UU
                         FROM user_restaurant_roles urr
                         JOIN roles r ON urr.role_id = r.id
                         WHERE urr.user_id = :userId
+                          AND urr.assignment_status = 'ACTIVE'
+                          AND urr.deleted_at IS NULL
+                          AND r.deleted_at IS NULL
+                          AND r.is_active = TRUE
                         """, rowMapperClass = UserRoleRowMapper.class)
         List<UserRoleDTO> findUserRoles(UUID userId);
 
@@ -36,6 +48,10 @@ public interface RoleJdbcRepository extends ListCrudRepository<RoleAggregate, UU
                         FROM roles r
                         JOIN user_restaurant_roles urr ON urr.role_id = r.id
                         WHERE urr.user_id = :userId AND urr.restaurant_id = :restaurantId
+                          AND urr.assignment_status = 'ACTIVE'
+                          AND urr.deleted_at IS NULL
+                          AND r.deleted_at IS NULL
+                          AND r.is_active = TRUE
                         """)
         Optional<RoleAggregate> findRoleByUserIdAndRestaurantId(UUID userId, UUID restaurantId);
 
@@ -47,11 +63,16 @@ public interface RoleJdbcRepository extends ListCrudRepository<RoleAggregate, UU
         @Query(value = """
                         SELECT urr.restaurant_id as urr_restaurant_id,
                                r.name as role_name,
+                               r.preset_key as role_preset_key,
                                r.restaurant_id as role_template_restaurant_id,
                                r.permissions
                         FROM user_restaurant_roles urr
                         JOIN roles r ON urr.role_id = r.id
                         WHERE urr.user_id = :userId
+                          AND urr.assignment_status = 'ACTIVE'
+                          AND urr.deleted_at IS NULL
+                          AND r.deleted_at IS NULL
+                          AND r.is_active = TRUE
                         """, rowMapperClass = UserRolePermissionRowMapper.class)
         List<UserRolePermissionProjection> findAllRoleAssignmentsForUser(UUID userId);
 }

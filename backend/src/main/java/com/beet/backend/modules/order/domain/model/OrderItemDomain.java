@@ -26,6 +26,8 @@ public class OrderItemDomain {
     private BigDecimal unitPriceSnapshot;
     private BigDecimal theoreticalCostSnapshot;
     private BigDecimal quantity;
+    @Builder.Default
+    private BigDecimal canceledQuantity = BigDecimal.ZERO;
     private BigDecimal subtotalGrossSnapshot;
     private String notes;
     private OffsetDateTime createdAt;
@@ -41,4 +43,13 @@ public class OrderItemDomain {
 
     @Builder.Default
     private List<OrderItemIngredientRequirementDomain> ingredientRequirements = new ArrayList<>();
+
+    @Builder.Default
+    private List<OrderItemCancellationDomain> cancellations = new ArrayList<>();
+
+    public BigDecimal getActiveQuantity() {
+        BigDecimal original = quantity == null ? BigDecimal.ZERO : quantity;
+        BigDecimal canceled = canceledQuantity == null ? BigDecimal.ZERO : canceledQuantity;
+        return original.subtract(canceled);
+    }
 }

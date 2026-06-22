@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useRestaurantContext } from "@/components/providers/restaurant-provider"
 import { formatCurrency, formatPriceDisplay, parsePriceInput } from "@/lib/formatters"
+import { useNow } from "@/lib/hooks/use-now"
 import { useOrderDetail, usePaymentMethods, useRegisterPayment } from "@/lib/hooks/use-orders"
 
 export default function OrderPaymentPage() {
@@ -32,20 +33,24 @@ export default function OrderPaymentPage() {
     const [tipAmount, setTipAmount] = useState("")
     const [externalReference, setExternalReference] = useState("")
     const [notes, setNotes] = useState("")
+    const now = useNow()
 
-    const paidAmount = useMemo(() => {
-        return (order?.payments ?? [])
-            .filter((payment) => payment.status === "RECORDED")
-            .reduce((sum, payment) => sum + payment.amount, 0)
-    }, [order?.payments])
+    const paidAmount = order?.paidTotal ?? 0
     const total = order?.totalGrossSnapshot ?? 0
-    const remaining = Math.max(total - paidAmount, 0)
+    const remaining = order?.remainingBalance ?? Math.max(total - paidAmount, 0)
     const selectedMethod = activeMethods.find((method) => method.id === paymentMethodId)
     const remainingDisplay = remaining > 0 ? formatPriceDisplay(String(remaining)) : ""
     const effectiveAmountDisplay = amount || remainingDisplay
     const effectiveAmount = parsePriceInput(effectiveAmountDisplay)
     const effectiveTipAmount = parsePriceInput(tipAmount)
     const isPaid = order?.paymentStatus === "PAID" || remaining <= 0
+    const paymentBlockedByOrderState = order?.orderStatus === "CANCELED"
+        || order?.orderStatus === "COMPLETED"
+        || order?.paymentStatus === "REFUND_PENDING"
+    const paymentExpirationProcessing = order?.orderStatus === "AWAITING_PAYMENT"
+        && !order.paymentExpired
+        && order.paymentExpiresAt !== null
+        && new Date(order.paymentExpiresAt).getTime() <= now
 
     const submit = async () => {
         await registerPayment.mutateAsync({
@@ -67,6 +72,8 @@ export default function OrderPaymentPage() {
     const canSubmit = !!paymentMethodId
         && effectiveAmount > 0
         && !isPaid
+        && !order?.paymentExpired
+        && !paymentExpirationProcessing
         && (!selectedMethod?.requiresReference || externalReference.trim().length > 0)
         && !registerPayment.isPending
 
@@ -155,19 +162,37 @@ export default function OrderPaymentPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {isPaid ? (
+                            {paymentBlockedByOrderState ? (
+                                <div className="space-y-3 border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                                    <p>No se pueden registrar pagos para órdenes canceladas, completadas o con devolución pendiente.</p>
+                                    <Button className="w-full" variant="outline" asChild>
+                                        <Link href={`/restaurants/${restaurantId}/orders/${order.id}`}>Ver detalle de la orden</Link>
+                                    </Button>
+                                </div>
+                            ) : order.paymentExpired ? (
+                                <div className="space-y-3 border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                                    <p>La orden venció y el inventario reservado fue liberado.</p>
+                                    <Button className="w-full" variant="outline" asChild>
+                                        <Link href={`/restaurants/${restaurantId}/orders/${order.id}`}>Reactivar desde el detalle</Link>
+                                    </Button>
+                                </div>
+                            ) : paymentExpirationProcessing ? (
+                                <div className="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                                    El vencimiento está siendo procesado. Espera a que la orden sea cancelada o quede disponible para reactivación.
+                                </div>
+                            ) : isPaid ? (
                                 <div className="space-y-4">
                                     <p className="text-sm text-muted-foreground">
-                                        El pago esta completo. En prepago, el backend cambia la orden a OPEN y genera el ticket de cocina.
+                                        El pago está completo. En prepago, el backend cambia la orden a OPEN y genera el ticket de cocina.
                                     </p>
                                     <Button className="w-full" asChild>
-                                        <Link href={`/restaurants/${restaurantId}/orders`}>Ir a ordenes</Link>
+                                        <Link href={`/restaurants/${restaurantId}/orders`}>Ir a órdenes</Link>
                                     </Button>
                                 </div>
                             ) : (
                                 <>
                                     <div className="grid gap-3">
-                                        <Label>Metodo</Label>
+                                        <Label>Método</Label>
                                         <Select value={paymentMethodId} onValueChange={setPaymentMethodId}>
                                             <SelectTrigger><SelectValue placeholder="Selecciona metodo" /></SelectTrigger>
                                             <SelectContent>

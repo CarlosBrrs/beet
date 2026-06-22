@@ -4,8 +4,10 @@ import com.beet.backend.modules.order.domain.model.DeliveryStatus;
 import com.beet.backend.modules.order.domain.model.KitchenStatus;
 import com.beet.backend.modules.order.domain.model.KitchenTicketStatus;
 import com.beet.backend.modules.order.domain.model.OrderLineType;
+import com.beet.backend.modules.order.domain.model.OrderItemInventoryDisposition;
 import com.beet.backend.modules.order.domain.model.OrderStatus;
 import com.beet.backend.modules.order.domain.model.PaymentRecordStatus;
+import com.beet.backend.modules.order.domain.model.PaymentRefundStatus;
 import com.beet.backend.modules.order.domain.model.PaymentStatus;
 import com.beet.backend.modules.order.domain.model.ServiceType;
 import com.beet.backend.shared.domain.model.OperationMode;
@@ -47,13 +49,22 @@ public record OrderDetailResponse(
         BigDecimal taxAmountSnapshot,
         BigDecimal totalGrossSnapshot,
         BigDecimal tipTotalSnapshot,
+        BigDecimal refundDueSnapshot,
+        BigDecimal refundedTotalSnapshot,
+        BigDecimal paidTotal,
+        BigDecimal remainingBalance,
+        OffsetDateTime paymentExpiresAt,
+        OffsetDateTime paymentExpiredAt,
+        boolean paymentExpired,
+        Integer prepaidOrderExpirationMinutes,
         String notes,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         List<OrderItemResponse> items,
         List<OrderTaxResponse> taxes,
         List<KitchenTicketResponse> kitchenTickets,
-        List<PaymentResponse> payments) {
+        List<PaymentResponse> payments,
+        List<RefundResponse> refunds) {
 
     public record OrderItemResponse(
             UUID id,
@@ -65,10 +76,25 @@ public record OrderDetailResponse(
             BigDecimal unitPriceSnapshot,
             BigDecimal theoreticalCostSnapshot,
             BigDecimal quantity,
+            BigDecimal canceledQuantity,
+            BigDecimal activeQuantity,
             BigDecimal subtotalGrossSnapshot,
             String notes,
             List<TemplateSlotSnapshotResponse> templateSlots,
-            List<OrderItemTaxResponse> taxes) {
+            List<OrderItemTaxResponse> taxes,
+            List<ItemCancellationResponse> cancellations) {
+    }
+
+    public record ItemCancellationResponse(
+            UUID id,
+            BigDecimal quantity,
+            BigDecimal grossAmount,
+            String reason,
+            KitchenStatus kitchenStatusSnapshot,
+            OrderItemInventoryDisposition inventoryDisposition,
+            OffsetDateTime createdAt,
+            UUID createdBy,
+            boolean systemGenerated) {
     }
 
     public record TemplateSlotSnapshotResponse(
@@ -116,6 +142,7 @@ public record OrderDetailResponse(
             String orderNumber,
             String orderPublicCode,
             String orderDisplayCode,
+            String customerName,
             KitchenTicketStatus status,
             OffsetDateTime sentAt,
             OffsetDateTime startedAt,
@@ -127,9 +154,13 @@ public record OrderDetailResponse(
     public record KitchenTicketLineResponse(
             UUID id,
             UUID orderItemId,
+            OrderLineType lineType,
             BigDecimal quantity,
+            BigDecimal canceledQuantity,
+            BigDecimal activeQuantity,
             String itemNameSnapshot,
-            String notes) {
+            String notes,
+            List<TemplateSlotSnapshotResponse> templateSlots) {
     }
 
     public record PaymentResponse(
@@ -139,6 +170,17 @@ public record OrderDetailResponse(
             BigDecimal amount,
             BigDecimal tipAmount,
             PaymentRecordStatus status,
+            String externalReference,
+            OffsetDateTime createdAt) {
+    }
+
+    public record RefundResponse(
+            UUID id,
+            UUID paymentId,
+            UUID cashSessionId,
+            BigDecimal amount,
+            PaymentRefundStatus status,
+            String reason,
             String externalReference,
             OffsetDateTime createdAt) {
     }

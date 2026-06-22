@@ -12,7 +12,8 @@ export const openCashSessionSchema = z.object({
 })
 
 export const closeCashSessionSchema = z.object({
-    closingAmount: amountSchema,
+    countedCash: amountSchema,
+    differenceReason: z.string(),
     notes: z.string(),
 })
 

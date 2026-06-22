@@ -5,7 +5,9 @@ import com.beet.backend.modules.cash.domain.exception.CashSessionNotFoundExcepti
 import com.beet.backend.modules.cash.domain.exception.CashSessionRequiredException;
 import com.beet.backend.modules.cash.domain.model.CashSessionDomain;
 import com.beet.backend.modules.order.application.dto.AddOrderItemRequest;
+import com.beet.backend.modules.order.application.dto.AddOrderItemsBatchRequest;
 import com.beet.backend.modules.order.application.dto.CancelOrderRequest;
+import com.beet.backend.modules.order.application.dto.CancelOrderItemRequest;
 import com.beet.backend.modules.order.application.dto.KitchenTicketStatusRequest;
 import com.beet.backend.modules.order.application.dto.OrderBillResponse;
 import com.beet.backend.modules.order.application.dto.OrderCreateRequest;
@@ -16,6 +18,8 @@ import com.beet.backend.modules.order.application.dto.PaymentMethodRequest;
 import com.beet.backend.modules.order.application.dto.PaymentMethodResponse;
 import com.beet.backend.modules.order.application.dto.PaymentRequest;
 import com.beet.backend.modules.order.application.dto.PaymentResponse;
+import com.beet.backend.modules.order.application.dto.PaymentRefundRequest;
+import com.beet.backend.modules.order.application.dto.PaymentRefundResponse;
 import com.beet.backend.modules.order.application.dto.PosCatalogResponse;
 import com.beet.backend.modules.order.application.dto.SplitBillsRequest;
 import com.beet.backend.modules.order.domain.api.OrderBillServicePort;
@@ -32,6 +36,7 @@ import com.beet.backend.modules.order.domain.model.OrderBillAllocationDomain;
 import com.beet.backend.modules.order.domain.model.OrderBillDomain;
 import com.beet.backend.modules.order.domain.model.OrderDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemDomain;
+import com.beet.backend.modules.order.domain.model.OrderItemCancellationDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTaxDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTemplateOptionDomain;
 import com.beet.backend.modules.order.domain.model.OrderItemTemplateSlotDomain;
@@ -41,7 +46,10 @@ import com.beet.backend.modules.order.domain.model.OrderStatus;
 import com.beet.backend.modules.order.domain.model.OrderTaxDomain;
 import com.beet.backend.modules.order.domain.model.PaymentDomain;
 import com.beet.backend.modules.order.domain.model.PaymentMethodDomain;
+import com.beet.backend.modules.order.domain.model.PaymentRefundDomain;
+import com.beet.backend.modules.order.domain.model.PaymentRefundStatus;
 import com.beet.backend.modules.order.domain.model.PaymentStatus;
+import com.beet.backend.modules.order.domain.model.PaymentPendingState;
 import com.beet.backend.modules.order.domain.model.PosCatalogEntryDomain;
 import com.beet.backend.modules.order.domain.model.PosTemplateOptionDomain;
 import com.beet.backend.modules.order.domain.model.PosTemplateSlotDomain;
@@ -69,9 +77,9 @@ public class OrderHandlerImpl implements OrderHandler {
 
     @Override
     public ApiGenericResponse<PageResponse<PosCatalogResponse>> posCatalog(UUID restaurantId, int page, int size,
-            String search, UUID menuId, UUID submenuId, String availability, String referenceType, String sort) {
+            String search, UUID menuId, UUID submenuId, String referenceType, String sort) {
         PageResponse<PosCatalogEntryDomain> result = orderService.findPosCatalog(
-                restaurantId, page, size, search, menuId, submenuId, availability, referenceType, sort);
+                restaurantId, page, size, search, menuId, submenuId, referenceType, sort);
         List<PosCatalogResponse> content = result.content().stream().map(this::toPosCatalogResponse).toList();
         return ApiGenericResponse.success(PageResponse.of(content, result.totalElements(), result.number(), result.size()));
     }
@@ -107,7 +115,16 @@ public class OrderHandlerImpl implements OrderHandler {
     public ApiGenericResponse<OrderDetailResponse> cancel(UUID restaurantId, UUID orderId, CancelOrderRequest request) {
         UUID userId = SecurityUtils.getAuthenticatedUserId();
         OrderDomain canceled = orderService.cancelOrder(
-                restaurantId, orderId, request != null ? request.reason() : null, userId);
+                restaurantId,
+                orderId,
+                request != null ? request.reason() : null,
+                request == null || request.lineDecisions() == null
+                        ? List.of()
+                        : request.lineDecisions().stream()
+                                .map(decision -> new OrderServicePort.OrderCancellationDecision(
+                                        decision.orderItemId(), decision.inventoryDisposition()))
+                                .toList(),
+                userId);
         return ApiGenericResponse.success(toDetailResponse(canceled));
     }
 
@@ -117,6 +134,25 @@ public class OrderHandlerImpl implements OrderHandler {
         UUID userId = SecurityUtils.getAuthenticatedUserId();
         OrderDomain updated = orderService.addItem(restaurantId, orderId, toOrderItemDomain(request), userId);
         return ApiGenericResponse.success(toDetailResponse(updated));
+    }
+
+    @Override
+    public ApiGenericResponse<OrderDetailResponse> addItems(UUID restaurantId, UUID orderId,
+            AddOrderItemsBatchRequest request) {
+        UUID userId = SecurityUtils.getAuthenticatedUserId();
+        OrderDomain updated = orderService.addItems(
+                restaurantId,
+                orderId,
+                request.items().stream().map(this::toOrderItemDomain).toList(),
+                userId);
+        return ApiGenericResponse.success(toDetailResponse(updated));
+    }
+
+    @Override
+    public ApiGenericResponse<OrderDetailResponse> reactivatePayment(UUID restaurantId, UUID orderId) {
+        UUID userId = SecurityUtils.getAuthenticatedUserId();
+        return ApiGenericResponse.success(toDetailResponse(
+                orderService.reactivatePayment(restaurantId, orderId, userId)));
     }
 
     @Override
@@ -136,6 +172,21 @@ public class OrderHandlerImpl implements OrderHandler {
     }
 
     @Override
+    public ApiGenericResponse<OrderDetailResponse> cancelItem(UUID restaurantId, UUID orderId, UUID orderItemId,
+            CancelOrderItemRequest request) {
+        UUID userId = SecurityUtils.getAuthenticatedUserId();
+        OrderDomain updated = orderService.cancelOrderItem(
+                restaurantId,
+                orderId,
+                orderItemId,
+                request.quantity(),
+                request.reason(),
+                request.inventoryDisposition(),
+                userId);
+        return ApiGenericResponse.success(toDetailResponse(updated));
+    }
+
+    @Override
     public ApiGenericResponse<OrderDetailResponse> getById(UUID restaurantId, UUID orderId) {
         OrderDomain found = orderService.findById(restaurantId, orderId)
                 .orElseThrow(() -> OrderNotFoundException.forId(orderId));
@@ -147,10 +198,10 @@ public class OrderHandlerImpl implements OrderHandler {
             OrderStatus orderStatus, PaymentStatus paymentStatus, KitchenStatus kitchenStatus, ServiceType serviceType,
             UUID tableId, OffsetDateTime dateFrom, OffsetDateTime dateTo, UUID cashSessionId, UUID cashRegisterId,
             UUID createdBy, String customer, UUID paymentMethodId, BigDecimal minTotal, BigDecimal maxTotal,
-            DeliveryStatus deliveryStatus, String search) {
+            DeliveryStatus deliveryStatus, PaymentPendingState paymentPendingState, String search) {
         OrderSearchCriteria criteria = new OrderSearchCriteria(restaurantId, page, size, sort, orderStatus,
                 paymentStatus, kitchenStatus, serviceType, tableId, dateFrom, dateTo, cashSessionId, cashRegisterId,
-                createdBy, customer, paymentMethodId, minTotal, maxTotal, deliveryStatus, search);
+                createdBy, customer, paymentMethodId, minTotal, maxTotal, deliveryStatus, paymentPendingState, search);
         PageResponse<OrderDomain> result = orderService.findAllPaged(criteria);
         List<OrderResponse> content = result.content().stream().map(this::toResponse).toList();
         return ApiGenericResponse.success(PageResponse.of(content, result.totalElements(), result.number(), result.size()));
@@ -230,6 +281,39 @@ public class OrderHandlerImpl implements OrderHandler {
                 .build();
         return ApiGenericResponse.success(toPaymentResponse(
                 orderService.registerPayment(restaurantId, orderId, payment, userId, deviceId)));
+    }
+
+    @Override
+    public ApiGenericResponse<PaymentRefundResponse> registerRefund(UUID restaurantId, UUID orderId,
+            PaymentRefundRequest request) {
+        UUID userId = SecurityUtils.getAuthenticatedUserId();
+        UUID deviceId = deviceContext.getDeviceId();
+        CashSessionDomain cashSession;
+        try {
+            cashSession = cashSessionQuery.getActiveSession(restaurantId, deviceId);
+        } catch (CashSessionNotFoundException exception) {
+            throw CashSessionRequiredException.forDevice(deviceId);
+        }
+        PaymentRefundDomain refund = PaymentRefundDomain.builder()
+                .restaurantId(restaurantId)
+                .orderId(orderId)
+                .paymentId(request.paymentId())
+                .cashSessionId(cashSession.getId())
+                .deviceId(deviceId)
+                .amount(request.amount())
+                .reason(request.reason())
+                .externalReference(request.reference())
+                .status(PaymentRefundStatus.RECORDED)
+                .build();
+        return ApiGenericResponse.success(toRefundResponse(
+                orderService.registerRefund(restaurantId, orderId, refund, userId, deviceId)));
+    }
+
+    @Override
+    public ApiGenericResponse<List<PaymentRefundResponse>> listRefunds(UUID restaurantId, UUID orderId) {
+        return ApiGenericResponse.success(orderService.listRefunds(restaurantId, orderId).stream()
+                .map(this::toRefundResponse)
+                .toList());
     }
 
     @Override
@@ -353,6 +437,14 @@ public class OrderHandlerImpl implements OrderHandler {
                 order.getTaxAmountSnapshot(),
                 order.getTotalGrossSnapshot(),
                 order.getTipTotalSnapshot(),
+                order.getRefundDueSnapshot(),
+                order.getRefundedTotalSnapshot(),
+                order.getPaidTotal(),
+                order.getRemainingBalance(),
+                order.getPaymentExpiresAt(),
+                order.getPaymentExpiredAt(),
+                order.isPaymentExpired(),
+                order.getPrepaidOrderExpirationMinutes(),
                 order.getCreatedAt(),
                 order.getUpdatedAt());
     }
@@ -389,6 +481,14 @@ public class OrderHandlerImpl implements OrderHandler {
                 order.getTaxAmountSnapshot(),
                 order.getTotalGrossSnapshot(),
                 order.getTipTotalSnapshot(),
+                order.getRefundDueSnapshot(),
+                order.getRefundedTotalSnapshot(),
+                order.getPaidTotal(),
+                order.getRemainingBalance(),
+                order.getPaymentExpiresAt(),
+                order.getPaymentExpiredAt(),
+                order.isPaymentExpired(),
+                order.getPrepaidOrderExpirationMinutes(),
                 order.getNotes(),
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
@@ -397,7 +497,9 @@ public class OrderHandlerImpl implements OrderHandler {
                 order.getKitchenTickets() == null ? List.of()
                         : order.getKitchenTickets().stream().map(this::toKitchenTicketResponse).toList(),
                 order.getPayments() == null ? List.of()
-                        : order.getPayments().stream().map(this::toNestedPaymentResponse).toList());
+                        : order.getPayments().stream().map(this::toNestedPaymentResponse).toList(),
+                order.getRefunds() == null ? List.of()
+                        : order.getRefunds().stream().map(this::toNestedRefundResponse).toList());
     }
 
     private OrderDetailResponse.OrderItemResponse toItemResponse(OrderItemDomain item) {
@@ -411,11 +513,29 @@ public class OrderHandlerImpl implements OrderHandler {
                 item.getUnitPriceSnapshot(),
                 item.getTheoreticalCostSnapshot(),
                 item.getQuantity(),
+                item.getCanceledQuantity(),
+                item.getActiveQuantity(),
                 item.getSubtotalGrossSnapshot(),
                 item.getNotes(),
                 item.getTemplateSlots() == null ? List.of()
                         : item.getTemplateSlots().stream().map(this::toTemplateSlotResponse).toList(),
-                item.getTaxes() == null ? List.of() : item.getTaxes().stream().map(this::toItemTaxResponse).toList());
+                item.getTaxes() == null ? List.of() : item.getTaxes().stream().map(this::toItemTaxResponse).toList(),
+                item.getCancellations() == null ? List.of()
+                        : item.getCancellations().stream().map(this::toItemCancellationResponse).toList());
+    }
+
+    private OrderDetailResponse.ItemCancellationResponse toItemCancellationResponse(
+            OrderItemCancellationDomain cancellation) {
+        return new OrderDetailResponse.ItemCancellationResponse(
+                cancellation.getId(),
+                cancellation.getQuantity(),
+                cancellation.getGrossAmount(),
+                cancellation.getReason(),
+                cancellation.getKitchenStatusSnapshot(),
+                cancellation.getInventoryDisposition(),
+                cancellation.getCreatedAt(),
+                cancellation.getCreatedBy(),
+                cancellation.isSystemGenerated());
     }
 
     private OrderDetailResponse.TemplateSlotSnapshotResponse toTemplateSlotResponse(OrderItemTemplateSlotDomain slot) {
@@ -461,6 +581,7 @@ public class OrderHandlerImpl implements OrderHandler {
                 ticket.getOrderNumber(),
                 ticket.getOrderPublicCode(),
                 ticket.getOrderDisplayCode(),
+                ticket.getCustomerName(),
                 ticket.getStatus(),
                 ticket.getSentAt(),
                 ticket.getStartedAt(),
@@ -472,7 +593,16 @@ public class OrderHandlerImpl implements OrderHandler {
 
     private OrderDetailResponse.KitchenTicketLineResponse toKitchenLineResponse(KitchenTicketLineDomain line) {
         return new OrderDetailResponse.KitchenTicketLineResponse(
-                line.getId(), line.getOrderItemId(), line.getQuantity(), line.getItemNameSnapshot(), line.getNotes());
+                line.getId(),
+                line.getOrderItemId(),
+                line.getLineType(),
+                line.getQuantity(),
+                line.getCanceledQuantity(),
+                line.getActiveQuantity(),
+                line.getItemNameSnapshot(),
+                line.getNotes(),
+                line.getTemplateSlots() == null ? List.of()
+                        : line.getTemplateSlots().stream().map(this::toTemplateSlotResponse).toList());
     }
 
     private OrderDetailResponse.PaymentResponse toNestedPaymentResponse(PaymentDomain payment) {
@@ -501,6 +631,32 @@ public class OrderHandlerImpl implements OrderHandler {
                 payment.getExternalReference(),
                 payment.getNotes(),
                 payment.getCreatedAt());
+    }
+
+    private OrderDetailResponse.RefundResponse toNestedRefundResponse(PaymentRefundDomain refund) {
+        return new OrderDetailResponse.RefundResponse(
+                refund.getId(),
+                refund.getPaymentId(),
+                refund.getCashSessionId(),
+                refund.getAmount(),
+                refund.getStatus(),
+                refund.getReason(),
+                refund.getExternalReference(),
+                refund.getCreatedAt());
+    }
+
+    private PaymentRefundResponse toRefundResponse(PaymentRefundDomain refund) {
+        return new PaymentRefundResponse(
+                refund.getId(),
+                refund.getRestaurantId(),
+                refund.getOrderId(),
+                refund.getPaymentId(),
+                refund.getCashSessionId(),
+                refund.getAmount(),
+                refund.getStatus(),
+                refund.getReason(),
+                refund.getExternalReference(),
+                refund.getCreatedAt());
     }
 
     private PaymentMethodResponse toPaymentMethodResponse(PaymentMethodDomain method) {

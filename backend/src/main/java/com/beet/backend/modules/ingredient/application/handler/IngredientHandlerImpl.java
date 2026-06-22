@@ -4,6 +4,7 @@ import com.beet.backend.modules.ingredient.application.dto.CreateIngredientReque
 import com.beet.backend.modules.ingredient.application.dto.IngredientDetailResponse;
 import com.beet.backend.modules.ingredient.application.dto.IngredientListResponse;
 import com.beet.backend.modules.ingredient.application.dto.IngredientResponse;
+import com.beet.backend.modules.ingredient.application.dto.UpdateIngredientRequest;
 import com.beet.backend.modules.ingredient.application.mapper.IngredientServiceMapper;
 import com.beet.backend.modules.ingredient.application.port.out.IngredientQueryPort;
 import com.beet.backend.modules.ingredient.domain.api.IngredientServicePort;
@@ -29,12 +30,10 @@ public class IngredientHandlerImpl implements IngredientHandler {
 
     @Override
     public ApiGenericResponse<IngredientResponse> create(CreateIngredientRequest request, UUID ownerId) {
-        // Map DTOs → domain objects
         MasterIngredientDomain ingredient = mapper.toIngredientDomain(request.masterIngredient());
         SupplierDomain supplier = mapper.toSupplierDomain(request.supplier());
         SupplierItemDomain supplierItem = mapper.toSupplierItemDomain(request.supplierItem());
 
-        // Delegate to use case with raw conversion data
         MasterIngredientDomain created = servicePort.create(
                 ingredient,
                 supplier,
@@ -60,5 +59,21 @@ public class IngredientHandlerImpl implements IngredientHandler {
         IngredientDetailResponse detail = queryPort.findDetailById(id, ownerId)
                 .orElseThrow(() -> IngredientNotFoundException.forId(id));
         return ApiGenericResponse.success(detail);
+    }
+
+    @Override
+    public ApiGenericResponse<IngredientDetailResponse> update(UUID id, UpdateIngredientRequest request, UUID ownerId) {
+        MasterIngredientDomain domain = MasterIngredientDomain.builder()
+                .name(request.name())
+                .baseUnitId(request.baseUnitId())
+                .build();
+        servicePort.update(id, domain, ownerId);
+        return findById(id, ownerId);
+    }
+
+    @Override
+    public ApiGenericResponse<Void> delete(UUID id, UUID ownerId, UUID actorId) {
+        servicePort.delete(id, ownerId, actorId);
+        return ApiGenericResponse.success(null);
     }
 }

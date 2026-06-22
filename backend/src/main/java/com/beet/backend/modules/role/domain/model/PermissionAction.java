@@ -18,6 +18,9 @@ public enum PermissionAction {
     PROCESS,
     ASSIGN_GUESTS,
     COMMENT,
+    CANCEL,
+    COMPLETE,
+    REFUND,
     // Wildcard for "all actions"
     ALL
 }

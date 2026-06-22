@@ -79,7 +79,9 @@ public class PermissionInterceptor {
                 // Check exact module + action
                 List<PermissionAction> moduleActions = entry.permissions().get(requiredModule);
                 if (moduleActions != null) {
-                    return moduleActions.contains(requiredAction) || moduleActions.contains(PermissionAction.ALL);
+                    return moduleActions.contains(requiredAction)
+                            || moduleActions.contains(PermissionAction.ALL)
+                            || moduleActions.contains(PermissionAction.MANAGE);
                 }
             }
 

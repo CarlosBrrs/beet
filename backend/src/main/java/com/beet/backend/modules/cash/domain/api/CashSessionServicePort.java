@@ -10,10 +10,10 @@ public interface CashSessionServicePort {
             UUID deviceId, BigDecimal openingAmount, String notes);
 
     CashSessionDomain closeSession(UUID restaurantId, UUID sessionId, UUID userId,
-            UUID deviceId, BigDecimal closingAmount, String notes);
+            UUID deviceId, BigDecimal countedCash, String differenceReason, String notes);
 
     CashSessionDomain forceCloseSession(UUID restaurantId, UUID sessionId, UUID userId,
-            UUID deviceId, BigDecimal closingAmount, String notes);
+            UUID deviceId, BigDecimal countedCash, String differenceReason, String notes);
 
     CashSessionDomain getActiveSession(UUID restaurantId, UUID deviceId);
 }

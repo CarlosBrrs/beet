@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { formatCurrency } from "@/lib/formatters"
 import { useCashRegisters } from "@/lib/hooks/use-cash-registers"
 import { useActiveCashSession } from "@/lib/hooks/use-cash-sessions"
+import { useCurrentBusinessDay } from "@/lib/hooks/use-cash-operations"
 
 import { CloseCashSessionDialog } from "./close-cash-session-dialog"
 import { OpenCashSessionDialog } from "./open-cash-session-dialog"
@@ -28,6 +29,7 @@ function shortId(value: string) {
 export function CashSessionPanel() {
     const { data: session, isLoading, isError, error } = useActiveCashSession()
     const { data: registers = [] } = useCashRegisters()
+    const { data: businessDay } = useCurrentBusinessDay()
     const [openDialogOpen, setOpenDialogOpen] = useState(false)
     const [closeDialogOpen, setCloseDialogOpen] = useState(false)
     const register = registers.find((item) => item.id === session?.cashRegisterId)
@@ -69,7 +71,11 @@ export function CashSessionPanel() {
                         </div>
                     </div>
                     <Can I="OPEN" a="CASH">
-                        <Button onClick={() => setOpenDialogOpen(true)}>
+                        <Button
+                            onClick={() => setOpenDialogOpen(true)}
+                            disabled={!businessDay}
+                            title={!businessDay ? "Abre el dia operativo primero" : undefined}
+                        >
                             <LogIn className="h-4 w-4" />
                             Open session
                         </Button>

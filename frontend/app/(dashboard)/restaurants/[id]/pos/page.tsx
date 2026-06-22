@@ -212,6 +212,7 @@ export default function PosPage() {
         [cart]
     )
     const cartIsValid = cart.every(isTemplateLineValid)
+    const customerNameIsValid = customerName.trim().length > 0
 
     const addToCart = (entry: PosCatalogResponse) => {
         setCart((current) => {
@@ -349,7 +350,7 @@ export default function PosPage() {
         const draft = await createDraft.mutateAsync({
             serviceType,
             tableId: serviceType === "DINE_IN" ? tableId : undefined,
-            customerName: customerName || undefined,
+            customerName: customerName.trim(),
             notes: notes || undefined,
             items: cart.map(toOrderItem),
         })
@@ -366,6 +367,7 @@ export default function PosPage() {
 
     const canSubmit = cart.length > 0
         && cartIsValid
+        && customerNameIsValid
         && (serviceType !== "DINE_IN" || !!tableId)
         && !createDraft.isPending
         && !confirmOrder.isPending
@@ -590,6 +592,9 @@ export default function PosPage() {
                     <div className="grid gap-3">
                         <Label>Cliente</Label>
                         <Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+                        {!customerNameIsValid && (
+                            <p className="text-xs text-destructive">El nombre del cliente es obligatorio.</p>
+                        )}
                     </div>
 
                     <div className="space-y-3">

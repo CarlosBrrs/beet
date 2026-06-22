@@ -10,13 +10,13 @@ import {
     Truck,
     ChefHat,
     Receipt,
-    MonitorSmartphone,
     LayoutGrid,
     User,
     CreditCard,
     Package,
     CircleDollarSign,
-    Blocks
+    Blocks,
+    BarChart3
 } from "lucide-react"
 import { PermissionModule } from "@/lib/permissions"
 
@@ -118,20 +118,14 @@ export const navigationConfig: NavItem[] = [
         ]
     },
     {
-        title: "Example 2",
+        title: "Reports",
         items: [
             {
-                title: "Sales & Reports",
+                title: "Operational Reports",
                 href: "/reports",
-                icon: Receipt,
+                icon: BarChart3,
                 module: PermissionModule.FINANCE,
             },
-            {
-                title: "Staff",
-                href: "/staff",
-                icon: Users,
-                module: PermissionModule.RESTAURANTS,
-            }
         ]
     },
     {
@@ -154,10 +148,10 @@ export const navigationConfig: NavItem[] = [
                 icon: Settings,
             },
             {
-                title: "Devices",
-                href: "/devices",
-                icon: MonitorSmartphone,
-                module: PermissionModule.OPERATIONS,
+                title: "Staff",
+                href: "/staff",
+                icon: Users,
+                module: PermissionModule.STAFF,
             },
         ]
     }
@@ -182,6 +176,17 @@ export const accountNavigationConfig: NavItem[] = [
                 href: "/account/cash-sessions",
                 icon: CircleDollarSign,
                 module: PermissionModule.CASH,
+            },
+            {
+                title: "Reports",
+                href: "/account/reports",
+                icon: BarChart3,
+            },
+            {
+                title: "Staff",
+                href: "/account/staff",
+                icon: Users,
+                module: PermissionModule.STAFF,
             }
         ]
     },
@@ -236,3 +241,4 @@ export const accountNavigationConfig: NavItem[] = [
         ]
     }
 ]
+

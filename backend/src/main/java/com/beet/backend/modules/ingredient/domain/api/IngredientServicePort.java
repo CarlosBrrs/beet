@@ -11,21 +11,6 @@ import java.util.UUID;
  */
 public interface IngredientServicePort {
 
-        /**
-         * Creates a master ingredient with its first supplier item.
-         * Orchestrates the Beet Math Engine (unit validation, factor calculation,
-         * costing).
-         *
-         * @param ingredient           master ingredient data (name, baseUnitId)
-         * @param supplier             supplier data (existing or quick-add)
-         * @param supplierItem         supplier item data (purchaseUnitName, brandName)
-         * @param conversionUnitId     the unit the user measured the purchase in (e.g.
-         *                             kg)
-         * @param userConversionFactor how many of conversionUnit per purchase unit
-         *                             (e.g. 25)
-         * @param totalPrice           total price paid for the purchase unit
-         * @param ownerId              tenant owner
-         */
         MasterIngredientDomain create(
                         MasterIngredientDomain ingredient,
                         SupplierDomain supplier,
@@ -34,4 +19,8 @@ public interface IngredientServicePort {
                         BigDecimal userConversionFactor,
                         BigDecimal totalPrice,
                         UUID ownerId);
+
+        MasterIngredientDomain update(UUID ingredientId, MasterIngredientDomain ingredient, UUID ownerId);
+
+        void delete(UUID ingredientId, UUID ownerId, UUID actorId);
 }

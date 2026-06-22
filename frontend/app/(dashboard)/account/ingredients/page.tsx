@@ -1,32 +1,31 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
-import { useCreateIngredient } from "@/lib/hooks/use-ingredients"
+import { useCreateIngredient, useDeleteIngredient, useIngredient, useUpdateIngredient } from "@/lib/hooks/use-ingredients"
 import { IngredientListResponse, CreateIngredientRequest } from "@/lib/api-types"
 import { IngredientList } from "@/components/modules/ingredients/ingredient-list"
 import { SheetShell } from "@/components/shared/sheet-shell"
 import { IngredientForm } from "@/components/modules/ingredients/ingredient-form"
+import { IngredientEditForm } from "@/components/modules/ingredients/ingredient-edit-form"
 import { IngredientDetail } from "@/components/modules/ingredients/ingredient-detail"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
-import { useDeleteIngredient } from "@/lib/hooks/use-ingredients"
+import { DialogShell } from "@/components/shared/dialog-shell"
 import { toast } from "sonner"
-
-// TODO: [SCALABILITY] The supplier dropdown in IngredientForm currently loads ALL suppliers
-// via useMockSuppliers(). Before scaling, evaluate:
-//   - Paginated / search-based API for suppliers (GET /suppliers?q=…&limit=20)
-//   - Async Select component with debounced search
-//   - Impact on UX when supplier count > 200
-// See also: use-ingredients.ts → useMockSuppliers()
 
 export default function IngredientsPage() {
     const createMutation = useCreateIngredient()
-
-    const { mutate: deleteIngredient } = useDeleteIngredient()
+    const updateMutation = useUpdateIngredient()
+    const deleteMutation = useDeleteIngredient()
 
     const [selectedIngredient, setSelectedIngredient] = useState<IngredientListResponse | null>(null)
+    const [deleteTarget, setDeleteTarget] = useState<IngredientListResponse | null>(null)
     const [isSheetOpen, setIsSheetOpen] = useState(false)
     const [isReadOnly, setIsReadOnly] = useState(false)
+
+    const { data: selectedIngredientDetail, isLoading: selectedIngredientLoading } = useIngredient(
+        selectedIngredient && !isReadOnly ? selectedIngredient.id : ""
+    )
 
     const handleCreate = (values: CreateIngredientRequest) => {
         createMutation.mutate(values, {
@@ -40,7 +39,6 @@ export default function IngredientsPage() {
         })
     }
 
-    // Handlers for Sheet (View/Edit)
     const openCreate = () => {
         setSelectedIngredient(null)
         setIsReadOnly(false)
@@ -60,20 +58,26 @@ export default function IngredientsPage() {
     }
 
     const handleDelete = (ingredient: IngredientListResponse) => {
-        if (confirm(`Are you sure you want to delete ${ingredient.name}? This action cannot be undone.`)) {
-            deleteIngredient(ingredient.id, {
-                onSuccess: () => toast.success("Ingredient deleted"),
-                onError: () => toast.error("Failed to delete ingredient"),
-            })
-        }
+        setDeleteTarget(ingredient)
+    }
+
+    const confirmDelete = () => {
+        if (!deleteTarget) return
+        deleteMutation.mutate(deleteTarget.id, {
+            onSuccess: () => {
+                toast.success("Ingredient deleted")
+                setDeleteTarget(null)
+            },
+            onError: (error) => toast.error(error.message || "Failed to delete ingredient"),
+        })
     }
 
     return (
-        <div className="space-y-4 pb-6">
-            <div className="flex justify-between items-center">
+        <div className="space-y-4 pb-8">
+            <div className="flex items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Ingredients</h2>
-                    <p className="text-muted-foreground">Manage your raw inventory items.</p>
+                    <p className="text-muted-foreground">Manage your shared raw inventory catalog.</p>
                 </div>
 
                 <Button onClick={openCreate}>
@@ -87,23 +91,33 @@ export default function IngredientsPage() {
                 onDelete={handleDelete}
             />
 
-            {/* Create / View / Edit Sheet */}
             <SheetShell
                 open={isSheetOpen}
                 onOpenChange={setIsSheetOpen}
                 title={selectedIngredient ? (isReadOnly ? "View Ingredient" : "Edit Ingredient") : "New Ingredient"}
-                description={selectedIngredient ? (isReadOnly ? "Details of the ingredient" : "Update ingredient details") : "Add a new ingredient to your inventory"}
+                description={selectedIngredient ? (isReadOnly ? "Details of the ingredient" : "Update basic ingredient metadata") : "Add a new ingredient to your inventory"}
                 size="lg"
             >
                 {selectedIngredient && isReadOnly ? (
-                    <IngredientDetail
-                        ingredientId={selectedIngredient.id}
-                    />
+                    <IngredientDetail ingredientId={selectedIngredient.id} />
                 ) : selectedIngredient ? (
-                    /* Edit mode — still mocked, provides a placeholder */
-                    <div className="text-sm text-muted-foreground py-4">
-                        Edit mode is not yet connected to the backend.
-                    </div>
+                    selectedIngredientLoading || !selectedIngredientDetail ? (
+                        <div className="py-8 text-sm text-muted-foreground">Loading ingredient...</div>
+                    ) : (
+                        <IngredientEditForm
+                            ingredient={selectedIngredientDetail}
+                            isSubmitting={updateMutation.isPending}
+                            onSubmit={(values) => {
+                                updateMutation.mutate({ ingredientId: selectedIngredient.id, payload: values }, {
+                                    onSuccess: () => {
+                                        toast.success("Ingredient updated")
+                                        setIsSheetOpen(false)
+                                    },
+                                    onError: (error) => toast.error(error.message || "Failed to update ingredient"),
+                                })
+                            }}
+                        />
+                    )
                 ) : (
                     <IngredientForm
                         onSubmit={handleCreate}
@@ -111,6 +125,27 @@ export default function IngredientsPage() {
                     />
                 )}
             </SheetShell>
+
+            {deleteTarget && (
+                <DialogShell
+                    open={!!deleteTarget}
+                    onOpenChange={(open) => !open && setDeleteTarget(null)}
+                    title="Delete ingredient"
+                    description="This performs a soft delete only if the ingredient has no stock, recipes, orders or inventory history."
+                >
+                    <div className="space-y-4">
+                        <p className="text-sm">
+                            Delete <span className="font-medium">{deleteTarget.name}</span>?
+                        </p>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+                            <Button variant="destructive" onClick={confirmDelete} disabled={deleteMutation.isPending}>
+                                Delete
+                            </Button>
+                        </div>
+                    </div>
+                </DialogShell>
+            )}
         </div>
     )
 }

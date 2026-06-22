@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { ColumnDef } from "@tanstack/react-table"
 import { IngredientListResponse } from "@/lib/api-types"
@@ -131,3 +131,4 @@ export function IngredientList({ onView, onEdit, onDelete }: IngredientListProps
         />
     )
 }
+
