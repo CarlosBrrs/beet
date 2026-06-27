@@ -1,6 +1,7 @@
 package com.beet.backend.modules.user.infrastructure.output.persistence.jdbc.mapper;
 
 import com.beet.backend.modules.user.domain.model.User;
+import com.beet.backend.modules.user.domain.model.UserAccountStatus;
 import com.beet.backend.modules.user.infrastructure.output.persistence.jdbc.aggregate.UserAggregate;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +24,10 @@ public class UserAggregateMapper {
                 .username(user.getUsername())
                 .ownerId(user.getOwnerId())
                 .subscriptionPlanId(user.getSubscriptionPlanId())
+                .accountStatus((user.getAccountStatus() == null
+                        ? UserAccountStatus.ACTIVE
+                        : user.getAccountStatus()).name())
+                .lastLoginAt(user.getLastLoginAt())
                 .build();
     }
 
@@ -42,6 +47,10 @@ public class UserAggregateMapper {
                 .username(aggregate.getUsername())
                 .ownerId(aggregate.getOwnerId())
                 .subscriptionPlanId(aggregate.getSubscriptionPlanId())
+                .accountStatus(aggregate.getAccountStatus() == null
+                        ? UserAccountStatus.ACTIVE
+                        : UserAccountStatus.valueOf(aggregate.getAccountStatus()))
+                .lastLoginAt(aggregate.getLastLoginAt())
                 .build();
     }
 }

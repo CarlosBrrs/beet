@@ -9,10 +9,17 @@ export enum PermissionModule {
     RECIPES = "RECIPES",
     PAYMENTS = "PAYMENTS",
     INVENTORY = "INVENTORY",
+    INVOICES = "INVOICES",
     OPERATIONS = "OPERATIONS",
     RESTAURANTS = "RESTAURANTS",
-    SUBSCRIPTION = "SUBSCRIPTION"
+    SUBSCRIPTION = "SUBSCRIPTION",
+    MENUS = "MENUS",
+    PREPARATIONS = "PREPARATIONS",
+    PRODUCTS = "PRODUCTS",
+    TEMPLATES = "TEMPLATES",
+    STAFF = "STAFF"
 }
+
 
 export enum PermissionAction {
     VIEW = "VIEW",
@@ -21,11 +28,16 @@ export enum PermissionAction {
     EDIT = "EDIT",
     DELETE = "DELETE",
     MANAGE = "MANAGE",
+    ACTIVATE = "ACTIVATE",
     OPEN = "OPEN",
     CLOSE = "CLOSE",
     VOID = "VOID",
     COMMENT = "COMMENT",
-    PROCESS = "PROCESS"
+    PROCESS = "PROCESS",
+    CANCEL = "CANCEL",
+    COMPLETE = "COMPLETE",
+    REFUND = "REFUND",
+    UPDATE_STATUS = "UPDATE_STATUS"
 }
 
 export type PermissionMap = Partial<Record<PermissionModule, PermissionAction[]>>

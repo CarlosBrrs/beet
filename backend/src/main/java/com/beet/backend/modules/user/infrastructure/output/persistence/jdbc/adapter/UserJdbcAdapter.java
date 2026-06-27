@@ -6,8 +6,11 @@ import com.beet.backend.modules.user.infrastructure.output.persistence.jdbc.aggr
 import com.beet.backend.modules.user.infrastructure.output.persistence.jdbc.mapper.UserAggregateMapper;
 import com.beet.backend.modules.user.infrastructure.output.persistence.jdbc.repository.UserJdbcRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,6 +20,7 @@ public class UserJdbcAdapter implements UserPersistencePort {
 
     private final UserJdbcRepository repository;
     private final UserAggregateMapper mapper;
+    private final JdbcClient jdbcClient;
 
     @Override
     public User save(User user) {
@@ -54,5 +58,19 @@ public class UserJdbcAdapter implements UserPersistencePort {
     @Override
     public boolean existsSubscriptionPlan(UUID subscriptionPlanId) {
         return repository.existsSubscriptionPlan(subscriptionPlanId);
+    }
+
+    @Override
+    public void updateLastLoginAt(UUID userId, Instant lastLoginAt) {
+        jdbcClient.sql("""
+                        UPDATE users
+                           SET last_login_at = :lastLoginAt,
+                               updated_at = NOW()
+                         WHERE id = :userId
+                           AND deleted_at IS NULL
+                        """)
+                .param("userId", userId)
+                .param("lastLoginAt", Timestamp.from(lastLoginAt))
+                .update();
     }
 }

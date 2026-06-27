@@ -2,6 +2,7 @@ package com.beet.backend.modules.user.domain.model;
 
 import lombok.*;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -26,6 +27,8 @@ public class User {
 
     // Reference to Plan
     private UUID subscriptionPlanId;
+    private UserAccountStatus accountStatus;
+    private Instant lastLoginAt;
 
     public String getFullName() {
         StringBuilder sb = new StringBuilder();

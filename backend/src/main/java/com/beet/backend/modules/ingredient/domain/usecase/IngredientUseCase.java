@@ -1,9 +1,8 @@
 package com.beet.backend.modules.ingredient.domain.usecase;
 
-import com.beet.backend.modules.ingredient.application.dto.IngredientDetailResponse;
-import com.beet.backend.modules.ingredient.application.dto.IngredientListResponse;
 import com.beet.backend.modules.ingredient.domain.api.IngredientServicePort;
 import com.beet.backend.modules.ingredient.domain.exception.IngredientAlreadyExistsException;
+import com.beet.backend.modules.ingredient.domain.exception.IngredientNotFoundException;
 import com.beet.backend.modules.ingredient.domain.exception.UnitTypeMismatchException;
 import com.beet.backend.modules.ingredient.domain.model.MasterIngredientDomain;
 import com.beet.backend.modules.ingredient.domain.model.SupplierItemDomain;
@@ -12,15 +11,12 @@ import com.beet.backend.modules.supplier.domain.api.SupplierServicePort;
 import com.beet.backend.modules.supplier.domain.model.SupplierDomain;
 import com.beet.backend.modules.unit.domain.api.UnitServicePort;
 import com.beet.backend.modules.unit.domain.model.UnitDomain;
-import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -42,46 +38,24 @@ public class IngredientUseCase implements IngredientServicePort {
             BigDecimal totalPrice,
             UUID ownerId) {
 
-        // 1. Validate: no duplicate ingredient name for this owner
+        ingredient.setName(cleanRequired(ingredient.getName(), "Ingredient name is required"));
         if (persistencePort.existsByNameAndOwnerId(ingredient.getName(), ownerId)) {
             throw IngredientAlreadyExistsException.forName(ingredient.getName());
         }
 
-        // 2. Resolve both units via UnitServicePort
         UnitDomain baseUnit = unitServicePort.findById(ingredient.getBaseUnitId());
         UnitDomain conversionUnit = unitServicePort.findById(conversionUnitId);
 
-        if (baseUnit == null) {
-            throw UnitTypeMismatchException.unitNotFound(ingredient.getBaseUnitId());
-        }
-        if (conversionUnit == null) {
-            throw UnitTypeMismatchException.unitNotFound(conversionUnitId);
-        }
+        validateUnits(baseUnit, conversionUnit, ingredient.getBaseUnitId(), conversionUnitId);
 
-        // 3. Validate: both units must be the same type (MASS↔MASS, VOLUME↔VOLUME)
-        if (baseUnit.getType() != conversionUnit.getType()) {
-            throw UnitTypeMismatchException.between(
-                    baseUnit.getType().name(), conversionUnit.getType().name());
-        }
-
-        // 4. Beet Math Engine — Calculate final factor
-        // finalFactor = userConversionFactor × conversionUnit.factorToBase
-        // e.g. 25 kg × 1000 (g/kg) = 25,000 g
         BigDecimal finalFactor = userConversionFactor.multiply(conversionUnit.getFactorToBase());
-
-        // 5. Calculate cost per base unit
-        // lastCostBase = totalPrice / finalFactor
-        // e.g. 45,000 / 25,000 = 1.80
         BigDecimal lastCostBase = totalPrice.divide(finalFactor, 6, RoundingMode.HALF_UP);
 
-        // 6. Resolve or create supplier via SupplierServicePort
         SupplierDomain resolvedSupplier = supplierServicePort.findOrCreate(supplier, ownerId);
 
-        // 7. Persist master ingredient
         ingredient.setOwnerId(ownerId);
         MasterIngredientDomain savedIngredient = persistencePort.saveMasterIngredient(ingredient);
 
-        // 8. Persist supplier item with computed values
         supplierItem.setMasterIngredientId(savedIngredient.getId());
         supplierItem.setSupplierId(resolvedSupplier.getId());
         supplierItem.setConversionFactor(finalFactor);
@@ -89,23 +63,70 @@ public class IngredientUseCase implements IngredientServicePort {
         SupplierItemDomain savedItem = persistencePort.saveSupplierItem(supplierItem);
         supplierItem.setId(savedItem.getId());
 
-        // 9. Activate: set the first supplier item as active
         persistencePort.updateActiveSupplierItem(savedIngredient.getId(), savedItem.getId());
 
-        // 10. Return enriched domain
         savedIngredient.setActiveSupplierItemId(savedItem.getId());
         return savedIngredient;
     }
 
     @Override
-    public PageResponse<IngredientListResponse> list(
-            UUID ownerId, int page, int size,
-            String search, String sortBy, boolean sortDesc, List<String> units) {
-        return persistencePort.findAllByOwnerId(ownerId, page, size, search, sortBy, sortDesc, units);
+    @Transactional
+    public MasterIngredientDomain update(UUID ingredientId, MasterIngredientDomain ingredient, UUID ownerId) {
+        MasterIngredientDomain existing = persistencePort.findByIdAndOwnerId(ingredientId, ownerId)
+                .orElseThrow(() -> IngredientNotFoundException.forId(ingredientId));
+
+        String cleanedName = cleanRequired(ingredient.getName(), "Ingredient name is required");
+        if (persistencePort.existsByNameAndOwnerIdExcludingId(cleanedName, ownerId, ingredientId)) {
+            throw IngredientAlreadyExistsException.forName(cleanedName);
+        }
+
+        if (ingredient.getBaseUnitId() == null) {
+            throw new IllegalArgumentException("Base unit is required");
+        }
+        UnitDomain newBaseUnit = unitServicePort.findById(ingredient.getBaseUnitId());
+        if (newBaseUnit == null) {
+            throw UnitTypeMismatchException.unitNotFound(ingredient.getBaseUnitId());
+        }
+
+        if (!ingredient.getBaseUnitId().equals(existing.getBaseUnitId())
+                && persistencePort.hasBaseUnitChangeBlockers(ingredientId)) {
+            throw new IllegalArgumentException(
+                    "Base unit cannot be changed after the ingredient has stock, recipe, supplier or order references.");
+        }
+
+        existing.setName(cleanedName);
+        existing.setBaseUnitId(ingredient.getBaseUnitId());
+        return persistencePort.saveMasterIngredient(existing);
     }
 
     @Override
-    public Optional<IngredientDetailResponse> findById(UUID id, UUID ownerId) {
-        return persistencePort.findDetailById(id, ownerId);
+    @Transactional
+    public void delete(UUID ingredientId, UUID ownerId, UUID actorId) {
+        persistencePort.findByIdAndOwnerId(ingredientId, ownerId)
+                .orElseThrow(() -> IngredientNotFoundException.forId(ingredientId));
+        if (persistencePort.hasDeleteBlockers(ingredientId)) {
+            throw new IllegalArgumentException(
+                    "Ingredient cannot be deleted while it has stock, recipes, orders or inventory history linked.");
+        }
+        persistencePort.softDelete(ingredientId, ownerId, actorId);
+    }
+
+    private void validateUnits(UnitDomain baseUnit, UnitDomain conversionUnit, UUID baseUnitId, UUID conversionUnitId) {
+        if (baseUnit == null) {
+            throw UnitTypeMismatchException.unitNotFound(baseUnitId);
+        }
+        if (conversionUnit == null) {
+            throw UnitTypeMismatchException.unitNotFound(conversionUnitId);
+        }
+        if (baseUnit.getType() != conversionUnit.getType()) {
+            throw UnitTypeMismatchException.between(baseUnit.getType().name(), conversionUnit.getType().name());
+        }
+    }
+
+    private String cleanRequired(String value, String message) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
     }
 }

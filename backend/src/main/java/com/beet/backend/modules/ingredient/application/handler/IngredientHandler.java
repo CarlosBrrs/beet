@@ -4,6 +4,7 @@ import com.beet.backend.modules.ingredient.application.dto.CreateIngredientReque
 import com.beet.backend.modules.ingredient.application.dto.IngredientDetailResponse;
 import com.beet.backend.modules.ingredient.application.dto.IngredientListResponse;
 import com.beet.backend.modules.ingredient.application.dto.IngredientResponse;
+import com.beet.backend.modules.ingredient.application.dto.UpdateIngredientRequest;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
 import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 
@@ -18,4 +19,8 @@ public interface IngredientHandler {
             String search, String sortBy, boolean sortDesc, List<String> units);
 
     ApiGenericResponse<IngredientDetailResponse> findById(UUID id, UUID ownerId);
+
+    ApiGenericResponse<IngredientDetailResponse> update(UUID id, UpdateIngredientRequest request, UUID ownerId);
+
+    ApiGenericResponse<Void> delete(UUID id, UUID ownerId, UUID actorId);
 }

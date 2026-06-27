@@ -1,0 +1,79 @@
+backend-1  | Picked up JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+backend-1  | Listening for transport dt_socket at address: 5005
+backend-1  | 
+backend-1  |   .   ____          _            __ _ _
+backend-1  |  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+backend-1  | ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+backend-1  |  \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+backend-1  |   '  |____| .__|_| |_|_| |_\__, | / / / /
+backend-1  |  =========|_|==============|___/=/_/_/_/
+backend-1  | 
+backend-1  |  :: Spring Boot ::                (v3.4.1)
+backend-1  | 
+backend-1  | 2026-03-11T06:27:03.648Z  INFO 1 --- [beet-backend] [           main] com.beet.backend.BeetApplication         : Starting BeetApplication v0.0.1-SNAPSHOT using Java 17.0.18 with PID 1 (/app/app.jar started by spring in /app)
+backend-1  | 2026-03-11T06:27:03.660Z DEBUG 1 --- [beet-backend] [           main] com.beet.backend.BeetApplication         : Running with Spring Boot v3.4.1, Spring v6.2.1
+backend-1  | 2026-03-11T06:27:03.666Z  INFO 1 --- [beet-backend] [           main] com.beet.backend.BeetApplication         : No active profile set, falling back to 1 default profile: "default"
+backend-1  | 2026-03-11T06:27:08.342Z  INFO 1 --- [beet-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JDBC repositories in DEFAULT mode.
+backend-1  | 2026-03-11T06:27:08.602Z  INFO 1 --- [beet-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 243 ms. Found 11 JDBC repository interfaces.
+backend-1  | 2026-03-11T06:27:11.822Z  INFO 1 --- [beet-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+backend-1  | 2026-03-11T06:27:11.927Z  INFO 1 --- [beet-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+backend-1  | 2026-03-11T06:27:11.929Z  INFO 1 --- [beet-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.34]
+backend-1  | 2026-03-11T06:27:12.099Z  INFO 1 --- [beet-backend] [           main] o.a.c.c.C.[.[localhost].[/api/v1]        : Initializing Spring embedded WebApplicationContext
+backend-1  | 2026-03-11T06:27:12.103Z  INFO 1 --- [beet-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 8229 ms
+backend-1  | JDBC Converters Loaded
+backend-1  | 2026-03-11T06:27:14.579Z  INFO 1 --- [beet-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+backend-1  | 2026-03-11T06:27:15.270Z  INFO 1 --- [beet-backend] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3a80c534
+backend-1  | 2026-03-11T06:27:15.275Z  INFO 1 --- [beet-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+backend-1  | 2026-03-11T06:27:15.359Z  INFO 1 --- [beet-backend] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://db:5432/beet (PostgreSQL 15.15)
+backend-1  | 2026-03-11T06:27:15.592Z  INFO 1 --- [beet-backend] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 9 migrations (execution time 00:00.105s)
+backend-1  | 2026-03-11T06:27:15.632Z  INFO 1 --- [beet-backend] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 9
+backend-1  | 2026-03-11T06:27:15.640Z  INFO 1 --- [beet-backend] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+backend-1  | 2026-03-11T06:27:16.726Z DEBUG 1 --- [beet-backend] [           main] c.b.b.s.i.s.JwtAuthenticationFilter      : Filter 'jwtAuthenticationFilter' configured for use
+backend-1  | 2026-03-11T06:27:18.420Z  INFO 1 --- [beet-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+backend-1  | 2026-03-11T06:27:18.422Z  WARN 1 --- [beet-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+backend-1  | 2026-03-11T06:27:20.129Z  INFO 1 --- [beet-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+backend-1  | 2026-03-11T06:27:21.536Z  INFO 1 --- [beet-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/api/v1'
+backend-1  | 2026-03-11T06:27:21.560Z  INFO 1 --- [beet-backend] [           main] com.beet.backend.BeetApplication         : Started BeetApplication in 19.979 seconds (process running for 21.989)
+backend-1  | 2026-03-11T06:28:43.848Z  INFO 1 --- [beet-backend] [nio-8080-exec-2] o.a.c.c.C.[.[localhost].[/api/v1]        : Initializing Spring DispatcherServlet 'dispatcherServlet'
+backend-1  | 2026-03-11T06:28:43.848Z  INFO 1 --- [beet-backend] [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+backend-1  | 2026-03-11T06:28:43.861Z  INFO 1 --- [beet-backend] [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 12 ms
+backend-1  | 2026-03-11T06:34:32.843Z  INFO 1 --- [beet-backend] [ionShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+backend-1  | Picked up JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+backend-1  | Listening for transport dt_socket at address: 5005
+backend-1  | 
+backend-1  |   .   ____          _            __ _ _
+backend-1  |  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+backend-1  | ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+backend-1  |  \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+backend-1  |   '  |____| .__|_| |_|_| |_\__, | / / / /
+backend-1  |  =========|_|==============|___/=/_/_/_/
+backend-1  | 
+backend-1  |  :: Spring Boot ::                (v3.4.1)
+backend-1  | 
+backend-1  | 2026-03-11T06:34:50.748Z  INFO 1 --- [beet-backend] [           main] com.beet.backend.BeetApplication         : Starting BeetApplication v0.0.1-SNAPSHOT using Java 17.0.18 with PID 1 (/app/app.jar started by spring in /app)
+backend-1  | 2026-03-11T06:34:50.754Z DEBUG 1 --- [beet-backend] [           main] com.beet.backend.BeetApplication         : Running with Spring Boot v3.4.1, Spring v6.2.1
+backend-1  | 2026-03-11T06:34:50.756Z  INFO 1 --- [beet-backend] [           main] com.beet.backend.BeetApplication         : No active profile set, falling back to 1 default profile: "default"
+backend-1  | 2026-03-11T06:34:55.320Z  INFO 1 --- [beet-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JDBC repositories in DEFAULT mode.
+backend-1  | 2026-03-11T06:34:55.633Z  INFO 1 --- [beet-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 294 ms. Found 11 JDBC repository interfaces.
+backend-1  | 2026-03-11T06:34:58.799Z  INFO 1 --- [beet-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+backend-1  | 2026-03-11T06:34:58.888Z  INFO 1 --- [beet-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+backend-1  | 2026-03-11T06:34:58.889Z  INFO 1 --- [beet-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.34]
+backend-1  | 2026-03-11T06:34:59.030Z  INFO 1 --- [beet-backend] [           main] o.a.c.c.C.[.[localhost].[/api/v1]        : Initializing Spring embedded WebApplicationContext
+backend-1  | 2026-03-11T06:34:59.032Z  INFO 1 --- [beet-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 8118 ms
+backend-1  | JDBC Converters Loaded
+backend-1  | 2026-03-11T06:35:01.342Z  INFO 1 --- [beet-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+backend-1  | 2026-03-11T06:35:02.092Z  INFO 1 --- [beet-backend] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@39afe59f
+backend-1  | 2026-03-11T06:35:02.098Z  INFO 1 --- [beet-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+backend-1  | 2026-03-11T06:35:02.205Z  INFO 1 --- [beet-backend] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://db:5432/beet (PostgreSQL 15.15)
+backend-1  | 2026-03-11T06:35:02.605Z  INFO 1 --- [beet-backend] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 9 migrations (execution time 00:00.232s)
+backend-1  | 2026-03-11T06:35:02.682Z  INFO 1 --- [beet-backend] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 9
+backend-1  | 2026-03-11T06:35:02.695Z  INFO 1 --- [beet-backend] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+backend-1  | 2026-03-11T06:35:04.303Z DEBUG 1 --- [beet-backend] [           main] c.b.b.s.i.s.JwtAuthenticationFilter      : Filter 'jwtAuthenticationFilter' configured for use
+backend-1  | 2026-03-11T06:35:06.555Z  INFO 1 --- [beet-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+backend-1  | 2026-03-11T06:35:06.556Z  WARN 1 --- [beet-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+backend-1  | 2026-03-11T06:35:09.238Z  INFO 1 --- [beet-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+backend-1  | 2026-03-11T06:35:11.288Z  INFO 1 --- [beet-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/api/v1'
+backend-1  | 2026-03-11T06:35:11.318Z  INFO 1 --- [beet-backend] [           main] com.beet.backend.BeetApplication         : Started BeetApplication in 22.643 seconds (process running for 24.493)
+backend-1  | 2026-03-11T06:35:55.101Z  INFO 1 --- [beet-backend] [nio-8080-exec-3] o.a.c.c.C.[.[localhost].[/api/v1]        : Initializing Spring DispatcherServlet 'dispatcherServlet'
+backend-1  | 2026-03-11T06:35:55.102Z  INFO 1 --- [beet-backend] [nio-8080-exec-3] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+backend-1  | 2026-03-11T06:35:55.115Z  INFO 1 --- [beet-backend] [nio-8080-exec-3] o.s.web.servlet.DispatcherServlet        : Completed initialization in 12 ms

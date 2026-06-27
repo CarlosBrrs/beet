@@ -4,9 +4,7 @@ import com.beet.backend.modules.role.infrastructure.output.persistence.jdbc.aggr
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.postgresql.util.PGobject;
 import org.springframework.jdbc.core.RowMapper;
 import com.beet.backend.modules.role.domain.model.PermissionAction;
 import com.beet.backend.modules.role.domain.model.PermissionModule;

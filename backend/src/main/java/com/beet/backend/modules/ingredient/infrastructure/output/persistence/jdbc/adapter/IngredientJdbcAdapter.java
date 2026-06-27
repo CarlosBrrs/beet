@@ -2,6 +2,7 @@ package com.beet.backend.modules.ingredient.infrastructure.output.persistence.jd
 
 import com.beet.backend.modules.ingredient.application.dto.IngredientDetailResponse;
 import com.beet.backend.modules.ingredient.application.dto.IngredientListResponse;
+import com.beet.backend.modules.ingredient.application.port.out.IngredientQueryPort;
 import com.beet.backend.modules.ingredient.domain.model.MasterIngredientDomain;
 import com.beet.backend.modules.ingredient.domain.model.SupplierItemDomain;
 import com.beet.backend.modules.ingredient.domain.spi.IngredientPersistencePort;
@@ -11,10 +12,10 @@ import com.beet.backend.modules.ingredient.infrastructure.output.persistence.jdb
 import com.beet.backend.shared.infrastructure.input.rest.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,31 +24,51 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class IngredientJdbcAdapter implements IngredientPersistencePort {
+public class IngredientJdbcAdapter implements IngredientPersistencePort, IngredientQueryPort {
 
-        // ── Write repositories ────────────────────────────────────────────────────
         private final MasterIngredientJdbcRepository ingredientRepository;
         private final SupplierItemJdbcRepository supplierItemRepository;
         private final IngredientAggregateMapper mapper;
         private final JdbcTemplate jdbcTemplate;
         private final JdbcClient jdbcClient;
 
-        // ── Allowed sort columns (prevent SQL injection on dynamic ORDER BY) ───────
         private static final Map<String, String> SORT_COLUMNS = Map.of(
-                        "name", "LOWER(mi.name)", // Use LOWER for case-insensitive human sorting
+                        "name", "LOWER(mi.name)",
                         "costPerBaseUnit", "si.last_cost_base",
                         "unitAbbreviation", "u.abbreviation",
-                        "currentStock", "LOWER(mi.name)" // fallback until ingredient_stocks exists
-        );
-
-        // ═════════════════════════════════════════════════════════════════════════
-        // Write Operations
-        // ═════════════════════════════════════════════════════════════════════════
+                        "currentStock", "current_stock");
 
         @Override
         public MasterIngredientDomain saveMasterIngredient(MasterIngredientDomain ingredient) {
-                var saved = ingredientRepository.save(mapper.toAggregate(ingredient));
-                return mapper.toDomain(saved);
+                if (ingredient.getId() == null) {
+                        var saved = ingredientRepository.save(mapper.toAggregate(ingredient));
+                        return mapper.toDomain(saved);
+                }
+                return jdbcClient.sql("""
+                                UPDATE master_ingredients
+                                   SET name = :name,
+                                       base_unit_id = :baseUnitId,
+                                       active_supplier_item_id = :activeSupplierItemId,
+                                       updated_at = NOW()
+                                 WHERE id = :id
+                                   AND owner_id = :ownerId
+                                   AND deleted_at IS NULL
+                             RETURNING id, owner_id, name, base_unit_id, active_supplier_item_id
+                                """)
+                                .param("id", ingredient.getId())
+                                .param("ownerId", ingredient.getOwnerId())
+                                .param("name", ingredient.getName())
+                                .param("baseUnitId", ingredient.getBaseUnitId())
+                                .param("activeSupplierItemId", ingredient.getActiveSupplierItemId())
+                                .query((rs, rowNum) -> MasterIngredientDomain.builder()
+                                                .id(rs.getObject("id", UUID.class))
+                                                .ownerId(rs.getObject("owner_id", UUID.class))
+                                                .name(rs.getString("name"))
+                                                .baseUnitId(rs.getObject("base_unit_id", UUID.class))
+                                                .activeSupplierItemId(rs.getObject("active_supplier_item_id", UUID.class))
+                                                .build())
+                                .optional()
+                                .orElseThrow(() -> new IllegalArgumentException("Ingredient not found."));
         }
 
         @Override
@@ -58,55 +79,171 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort {
 
         @Override
         public void updateActiveSupplierItem(UUID masterIngredientId, UUID supplierItemId) {
-                // Direct UPDATE to avoid loading the full aggregate (avoids circular dependency
-                // issues with Spring Data JDBC)
                 jdbcTemplate.update(
-                                "UPDATE master_ingredients SET active_supplier_item_id = ? WHERE id = ?",
+                                "UPDATE master_ingredients SET active_supplier_item_id = ?, updated_at = NOW() WHERE id = ?",
                                 supplierItemId, masterIngredientId);
         }
 
         @Override
         public boolean existsByNameAndOwnerId(String name, UUID ownerId) {
-                return ingredientRepository.existsByNameAndOwnerId(name, ownerId);
+                Boolean exists = jdbcClient.sql("""
+                                SELECT COUNT(1) > 0
+                                FROM master_ingredients
+                                WHERE owner_id = :ownerId
+                                  AND LOWER(name) = LOWER(:name)
+                                  AND deleted_at IS NULL
+                                """)
+                                .param("ownerId", ownerId)
+                                .param("name", name)
+                                .query(Boolean.class)
+                                .single();
+                return Boolean.TRUE.equals(exists);
         }
 
-        // ═════════════════════════════════════════════════════════════════════════
-        // Read Operations (CQRS — uses NamedParameterJdbcTemplate with raw SQL)
-        // ═════════════════════════════════════════════════════════════════════════
+        @Override
+        public boolean existsByNameAndOwnerIdExcludingId(String name, UUID ownerId, UUID excludedId) {
+                Boolean exists = jdbcClient.sql("""
+                                SELECT COUNT(1) > 0
+                                FROM master_ingredients
+                                WHERE owner_id = :ownerId
+                                  AND LOWER(name) = LOWER(:name)
+                                  AND id <> :excludedId
+                                  AND deleted_at IS NULL
+                                """)
+                                .param("ownerId", ownerId)
+                                .param("name", name)
+                                .param("excludedId", excludedId)
+                                .query(Boolean.class)
+                                .single();
+                return Boolean.TRUE.equals(exists);
+        }
+
+        @Override
+        public boolean existsByIdAndOwnerId(UUID ingredientId, UUID ownerId) {
+                Boolean exists = jdbcClient.sql("""
+                                SELECT COUNT(1) > 0
+                                FROM master_ingredients
+                                WHERE id = :ingredientId
+                                  AND owner_id = :ownerId
+                                  AND deleted_at IS NULL
+                                """)
+                                .param("ingredientId", ingredientId)
+                                .param("ownerId", ownerId)
+                                .query(Boolean.class)
+                                .single();
+                return Boolean.TRUE.equals(exists);
+        }
+
+        @Override
+        public Optional<MasterIngredientDomain> findByIdAndOwnerId(UUID ingredientId, UUID ownerId) {
+                return jdbcClient.sql("""
+                                SELECT id, owner_id, name, base_unit_id, active_supplier_item_id
+                                FROM master_ingredients
+                                WHERE id = :ingredientId
+                                  AND owner_id = :ownerId
+                                  AND deleted_at IS NULL
+                                """)
+                                .param("ingredientId", ingredientId)
+                                .param("ownerId", ownerId)
+                                .query((rs, rowNum) -> MasterIngredientDomain.builder()
+                                                .id(rs.getObject("id", UUID.class))
+                                                .ownerId(rs.getObject("owner_id", UUID.class))
+                                                .name(rs.getString("name"))
+                                                .baseUnitId(rs.getObject("base_unit_id", UUID.class))
+                                                .activeSupplierItemId(rs.getObject("active_supplier_item_id", UUID.class))
+                                                .build())
+                                .optional();
+        }
+
+        @Override
+        public boolean hasBaseUnitChangeBlockers(UUID ingredientId) {
+                Boolean exists = jdbcClient.sql("""
+                                SELECT EXISTS (
+                                    SELECT 1 FROM supplier_items WHERE master_ingredient_id = :ingredientId AND deleted_at IS NULL
+                                    UNION ALL
+                                    SELECT 1 FROM ingredient_stocks WHERE master_ingredient_id = :ingredientId AND deleted_at IS NULL
+                                    UNION ALL
+                                    SELECT 1 FROM recipe_lines WHERE master_ingredient_id = :ingredientId
+                                    UNION ALL
+                                    SELECT 1 FROM order_item_ingredient_requirements WHERE master_ingredient_id = :ingredientId
+                                    UNION ALL
+                                    SELECT 1 FROM inventory_reservations WHERE master_ingredient_id = :ingredientId
+                                    UNION ALL
+                                    SELECT 1 FROM order_item_consumptions WHERE master_ingredient_id = :ingredientId
+                                )
+                                """)
+                                .param("ingredientId", ingredientId)
+                                .query(Boolean.class)
+                                .single();
+                return Boolean.TRUE.equals(exists);
+        }
+
+        @Override
+        public boolean hasDeleteBlockers(UUID ingredientId) {
+                Boolean exists = jdbcClient.sql("""
+                                SELECT EXISTS (
+                                    SELECT 1 FROM ingredient_stocks WHERE master_ingredient_id = :ingredientId AND deleted_at IS NULL
+                                    UNION ALL
+                                    SELECT 1 FROM recipe_lines WHERE master_ingredient_id = :ingredientId
+                                    UNION ALL
+                                    SELECT 1 FROM order_item_ingredient_requirements WHERE master_ingredient_id = :ingredientId
+                                    UNION ALL
+                                    SELECT 1 FROM inventory_reservations WHERE master_ingredient_id = :ingredientId
+                                    UNION ALL
+                                    SELECT 1 FROM order_item_consumptions WHERE master_ingredient_id = :ingredientId
+                                    UNION ALL
+                                    SELECT 1 FROM inventory_transactions it JOIN ingredient_stocks ist ON ist.id = it.ingredient_stock_id WHERE ist.master_ingredient_id = :ingredientId
+                                )
+                                """)
+                                .param("ingredientId", ingredientId)
+                                .query(Boolean.class)
+                                .single();
+                return Boolean.TRUE.equals(exists);
+        }
+
+        @Override
+        public void softDelete(UUID ingredientId, UUID ownerId, UUID actorId) {
+                jdbcClient.sql("""
+                                UPDATE master_ingredients
+                                   SET deleted_at = NOW(),
+                                       deleted_by = :actorId,
+                                       updated_at = NOW()
+                                 WHERE id = :ingredientId
+                                   AND owner_id = :ownerId
+                                   AND deleted_at IS NULL
+                                """)
+                                .param("ingredientId", ingredientId)
+                                .param("ownerId", ownerId)
+                                .param("actorId", actorId)
+                                .update();
+        }
 
         @Override
         public PageResponse<IngredientListResponse> findAllByOwnerId(
                         UUID ownerId, int page, int size,
                         String search, String sortBy, boolean sortDesc, List<String> units) {
 
-                // 1. DYNAMIC SORTING (SECURITY): We map the frontend's sort key to the actual
-                // DB column using an allowlist.
-                // This completely prevents SQL Injection, because we never concatenate user
-                // input directly into the ORDER BY clause.
-                String orderColumn = SORT_COLUMNS.getOrDefault(sortBy, "mi.name");
+                int safePage = Math.max(page, 0);
+                int safeSize = Math.min(Math.max(size, 1), 100);
+                String orderColumn = SORT_COLUMNS.getOrDefault(sortBy, "LOWER(mi.name)");
                 String orderDir = sortDesc ? "DESC" : "ASC";
-
-                // Handle NULL sort on cost (so ingredients without a supplier/cost go to the
-                // bottom of the list instead of the top)
-                String orderClause = "cost".equals(sortBy)
+                String orderClause = "costPerBaseUnit".equals(sortBy)
                                 ? orderColumn + " " + orderDir + " NULLS LAST"
                                 : orderColumn + " " + orderDir;
 
                 boolean hasSearch = search != null && !search.isBlank();
                 boolean hasUnits = units != null && !units.isEmpty();
 
-                // 2. REUSABLE WHERE CLAUSE: For server-side pagination, we always need TWO
-                // queries:
-                // a) One to fetch the actual paginated data rows.
-                // b) One to count the TOTAL matching rows (so the frontend knows how many pages
-                // exist).
-                // We use a StringBuilder to dynamically append filters ONLY if they exist.
-                // This avoids PostgreSQL driver errors regarding type inference on 'IS NULL'
-                // checks and array expansions.
                 StringBuilder baseWhere = new StringBuilder("""
                                 FROM master_ingredients mi
                                 JOIN units u ON mi.base_unit_id = u.id
-                                LEFT JOIN supplier_items si ON mi.active_supplier_item_id = si.id
+                                LEFT JOIN supplier_items si ON mi.active_supplier_item_id = si.id AND si.deleted_at IS NULL
+                                LEFT JOIN (
+                                    SELECT master_ingredient_id, COALESCE(SUM(current_stock), 0) AS current_stock
+                                    FROM ingredient_stocks
+                                    WHERE deleted_at IS NULL
+                                    GROUP BY master_ingredient_id
+                                ) stock ON stock.master_ingredient_id = mi.id
                                 WHERE mi.owner_id = :ownerId
                                   AND mi.deleted_at IS NULL
                                 """);
@@ -116,67 +253,52 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort {
                 }
 
                 if (hasUnits) {
-                        // Spring JdbcClient automatically expands IN (:units) into IN (?, ?, ?) when
-                        // passing a List
                         baseWhere.append("  AND u.abbreviation IN (:units)\n");
                 }
 
-                String selectSql = "SELECT mi.id, mi.name, u.abbreviation AS unit_abbreviation, "
+                String selectSql = "SELECT mi.id, mi.name, mi.base_unit_id, u.abbreviation AS unit_abbreviation, "
                                 + "si.last_cost_base AS cost_per_base_unit "
-                                + baseWhere.toString()
+                                + baseWhere
                                 + " ORDER BY " + orderClause
                                 + " LIMIT :size OFFSET :offset";
 
-                String countSql = "SELECT COUNT(*) " + baseWhere.toString();
+                String countSql = "SELECT COUNT(*) " + baseWhere;
 
-                // 3. SECURE PARAMETER BINDING
-                // We build the parameters map using Map.of or put(), because JdbcClient
-                // requires a Map for named arguments, not a MapSqlParameterSource
-                // (unless using .paramSource()).
                 Map<String, Object> paramMap = new HashMap<>();
                 paramMap.put("ownerId", ownerId);
-                paramMap.put("size", size);
-                paramMap.put("offset", (long) page * size);
+                paramMap.put("size", safeSize);
+                paramMap.put("offset", (long) safePage * safeSize);
 
                 if (hasSearch) {
-                        paramMap.put("search", search);
+                        paramMap.put("search", search.trim());
                 }
                 if (hasUnits) {
                         paramMap.put("units", units);
                 }
 
-                // 4. JDBC CLIENT - COUNT QUERY
                 Long totalElements = jdbcClient.sql(countSql)
                                 .params(paramMap)
                                 .query(Long.class)
                                 .single();
-                if (totalElements == null)
+                if (totalElements == null) {
                         totalElements = 0L;
+                }
 
-                // 5. JDBC CLIENT - FETCH QUERY: We pass the SELECT SQL, inject the parameters,
-                // and provide a RowMapper block. For every row returned by the database (rs),
-                // we manually construct
-                // our flat List DTO. Finally, .list() executes the query and gathers the
-                // results into a List.
                 List<IngredientListResponse> content = jdbcClient.sql(selectSql)
                                 .params(paramMap)
                                 .query((rs, rowNum) -> new IngredientListResponse(
-                                                UUID.fromString(rs.getString("id")),
+                                                rs.getObject("id", UUID.class),
                                                 rs.getString("name"),
+                                                rs.getObject("base_unit_id", UUID.class),
                                                 rs.getString("unit_abbreviation"),
-                                                rs.getBigDecimal("cost_per_base_unit") // may be null if no supplier
-                                ))
+                                                rs.getBigDecimal("cost_per_base_unit")))
                                 .list();
 
-                return PageResponse.of(content, totalElements, page, size);
+                return PageResponse.of(content, totalElements, safePage, safeSize);
         }
 
         @Override
         public Optional<IngredientDetailResponse> findDetailById(UUID id, UUID ownerId) {
-                // 1. RAW SQL PROJECTION: We select exactly what the frontend needs across 3
-                // different tables.
-                // We use LEFT JOINs for supplier configuration because an ingredient might
-                // exist but not have any supplier assigned yet.
                 String sql = """
                                 SELECT mi.id, mi.name, mi.base_unit_id,
                                        u.name          AS unit_name,
@@ -187,11 +309,18 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort {
                                        si.purchase_unit_name,
                                        si.conversion_factor,
                                        sup.id          AS supplier_id,
-                                       sup.name        AS supplier_name
+                                       sup.name        AS supplier_name,
+                                       COALESCE(stock.current_stock, 0) AS current_stock
                                 FROM master_ingredients mi
                                 JOIN units u ON mi.base_unit_id = u.id
-                                LEFT JOIN supplier_items si  ON mi.active_supplier_item_id = si.id
-                                LEFT JOIN suppliers     sup  ON si.supplier_id = sup.id
+                                LEFT JOIN supplier_items si  ON mi.active_supplier_item_id = si.id AND si.deleted_at IS NULL
+                                LEFT JOIN suppliers     sup  ON si.supplier_id = sup.id AND sup.deleted_at IS NULL
+                                LEFT JOIN (
+                                    SELECT master_ingredient_id, COALESCE(SUM(current_stock), 0) AS current_stock
+                                    FROM ingredient_stocks
+                                    WHERE deleted_at IS NULL
+                                    GROUP BY master_ingredient_id
+                                ) stock ON stock.master_ingredient_id = mi.id
                                 WHERE mi.id = :id
                                   AND mi.owner_id = :ownerId
                                   AND mi.deleted_at IS NULL
@@ -201,22 +330,11 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort {
                                 .param("id", id)
                                 .param("ownerId", ownerId)
                                 .query((rs, rowNum) -> {
-                                        // 2. CUSTOM ROW MAPPER: Since we are reading multiple tables into a single
-                                        // nested DTO structure,
-                                        // we manually extract the columns. `rs` is the JDBC ResultSet representing the
-                                        // current row.
-
                                         String supplierItemIdStr = rs.getString("supplier_item_id");
                                         String supplierIdStr = rs.getString("supplier_id");
 
                                         IngredientDetailResponse.ActiveSupplierInfo supplierInfo = null;
-
-                                        // 3. NULL HANDLING: Because we used LEFT JOIN, if the ingredient has no active
-                                        // supplier,
-                                        // supplier_item_id will be NULL in the DB. We detect that to avoid
-                                        // NullPointerExceptions,
-                                        // and just leave the inner `supplierInfo` object as null in the main response.
-                                        if (supplierItemIdStr != null) {
+                                        if (supplierItemIdStr != null && supplierIdStr != null) {
                                                 supplierInfo = new IngredientDetailResponse.ActiveSupplierInfo(
                                                                 UUID.fromString(supplierIdStr),
                                                                 rs.getString("supplier_name"),
@@ -227,15 +345,19 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort {
                                                                 rs.getBigDecimal("last_cost_base"));
                                         }
 
+                                        BigDecimal cost = rs.getBigDecimal("last_cost_base");
                                         return new IngredientDetailResponse(
-                                                        UUID.fromString(rs.getString("id")),
+                                                        rs.getObject("id", UUID.class),
                                                         rs.getString("name"),
-                                                        UUID.fromString(rs.getString("base_unit_id")),
+                                                        rs.getObject("base_unit_id", UUID.class),
                                                         rs.getString("unit_name"),
                                                         rs.getString("unit_abbreviation"),
-                                                        rs.getBigDecimal("last_cost_base"),
+                                                        cost,
+                                                        rs.getBigDecimal("current_stock"),
+                                                        cost != null,
                                                         supplierInfo);
                                 })
                                 .optional();
         }
 }
+

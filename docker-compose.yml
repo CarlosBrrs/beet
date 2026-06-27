@@ -1,15 +1,15 @@
 services:
   backend:
     build: ./backend
-    ports:
-      - "8080:8080"
-      - "5005:5005"
     environment:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
+    ports:
+      - "8080:8080"
+      - "5005:5005"
     depends_on:
       db:
         condition: service_healthy
@@ -19,8 +19,6 @@ services:
       - POSTGRES_DB=beet
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-    ports:
-      - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,6 +26,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    ports:
+      - "5433:5432"
 
 volumes:
   db_data:

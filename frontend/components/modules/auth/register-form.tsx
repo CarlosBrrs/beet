@@ -24,15 +24,15 @@ import { env } from "@/lib/env"
 import { ApiGenericResponse, SubscriptionPlan } from "@/lib/api-types"
 
 const registerSchema = z.object({
-    firstName: z.string().min(2, "First name is required"),
-    secondName: z.string().optional(),
-    firstLastname: z.string().min(2, "Last name is required"),
-    secondLastname: z.string().optional(),
-    username: z.string().min(3, "Username must be at least 3 characters"),
-    email: z.string().email("Invalid email address"),
-    phoneNumber: z.string().min(10, "Phone number must be at least 10 digits"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    subscriptionPlanId: z.string().uuid("Please select a subscription plan"),
+    firstName: z.string().trim().min(2, "First name is required"),
+    secondName: z.string().trim().optional(),
+    firstLastname: z.string().trim().min(2, "Last name is required"),
+    secondLastname: z.string().trim().optional(),
+    username: z.string().trim().min(3, "Username must be at least 3 characters"),
+    email: z.string().trim().email("Invalid email address"),
+    phoneNumber: z.string().trim().min(10, "Phone number must be at least 10 digits"),
+    password: z.string().trim().min(8, "Password must be at least 8 characters"),
+    subscriptionPlanId: z.string().trim().uuid("Please select a subscription plan"),
 })
 
 export function RegisterForm() {

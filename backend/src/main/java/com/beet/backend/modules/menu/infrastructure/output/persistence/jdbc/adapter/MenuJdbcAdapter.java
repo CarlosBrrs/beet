@@ -1,0 +1,301 @@
+package com.beet.backend.modules.menu.infrastructure.output.persistence.jdbc.adapter;
+
+import com.beet.backend.modules.menu.domain.model.MenuDomain;
+import com.beet.backend.modules.menu.domain.model.SubmenuNodeDomain;
+import com.beet.backend.modules.menu.domain.model.SubmenuNodeType;
+import com.beet.backend.modules.menu.domain.model.SubmenuDomain;
+import com.beet.backend.modules.menu.domain.spi.MenuPersistencePort;
+import com.beet.backend.modules.menu.domain.spi.SubmenuNodeQueryPort;
+import com.beet.backend.modules.menu.domain.spi.SubmenuPersistencePort;
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.OffsetDateTime;
+import java.util.*;
+
+@Repository
+@RequiredArgsConstructor
+public class MenuJdbcAdapter implements MenuPersistencePort, SubmenuPersistencePort, SubmenuNodeQueryPort {
+
+    private final JdbcClient jdbcClient;
+
+    // --- Menus ---
+
+    @Override
+    public MenuDomain save(MenuDomain menu) {
+        String sql = """
+                    INSERT INTO menus (restaurant_id, name, description)
+                    VALUES (:restaurantId, :name, :description)
+                    RETURNING id, restaurant_id, name, description, created_at, updated_at
+                """;
+
+        return jdbcClient.sql(sql)
+                .param("restaurantId", menu.getRestaurantId())
+                .param("name", menu.getName())
+                .param("description", menu.getDescription() != null ? menu.getDescription() : "")
+                .query(this::mapMenu)
+                .single();
+    }
+
+    @Override
+    public MenuDomain update(MenuDomain menu) {
+        String sql = """
+                    UPDATE menus
+                    SET name = :name,
+                        description = :description,
+                        updated_at = NOW()
+                    WHERE id = :id
+                    RETURNING id, restaurant_id, name, description, created_at, updated_at
+                """;
+
+        return jdbcClient.sql(sql)
+                .param("name", menu.getName())
+                .param("description", menu.getDescription() != null ? menu.getDescription() : "")
+                .param("id", menu.getId())
+                .query(this::mapMenu)
+                .single();
+    }
+
+    @Override
+    public Optional<MenuDomain> findMenuById(UUID menuId) {
+        String sql = "SELECT * FROM menus WHERE id = :id";
+        return jdbcClient.sql(sql)
+                .param("id", menuId)
+                .query(this::mapMenu)
+                .optional();
+    }
+
+    @Override
+    public List<MenuDomain> findAllWithSubmenus(UUID restaurantId) {
+        // Fetch menus
+        String menusSql = "SELECT * FROM menus WHERE restaurant_id = :restaurantId ORDER BY name ASC";
+        List<MenuDomain> menus = jdbcClient.sql(menusSql)
+                .param("restaurantId", restaurantId)
+                .query(this::mapMenu)
+                .list();
+
+        if (menus.isEmpty())
+            return menus;
+
+        // Fetch submenus for these menus
+        List<UUID> menuIds = menus.stream().map(MenuDomain::getId).toList();
+        String submenusSql = "SELECT * FROM submenus WHERE menu_id IN (:menuIds) ORDER BY sort_order ASC, name ASC";
+        List<SubmenuDomain> submenus = jdbcClient.sql(submenusSql)
+                .param("menuIds", menuIds)
+                .query(this::mapSubmenu)
+                .list();
+
+        // Group submenus by menuId
+        Map<UUID, List<SubmenuDomain>> submenusByMenuId = new HashMap<>();
+        for (SubmenuDomain sm : submenus) {
+            submenusByMenuId.computeIfAbsent(sm.getMenuId(), k -> new ArrayList<>()).add(sm);
+        }
+
+        // Assign to menus
+        for (MenuDomain m : menus) {
+            m.setSubmenus(submenusByMenuId.getOrDefault(m.getId(), new ArrayList<>()));
+        }
+
+        return menus;
+    }
+
+    @Override
+    public boolean existsByNameInRestaurant(String name, UUID restaurantId) {
+        String sql = "SELECT COUNT(1) FROM menus WHERE restaurant_id = :restaurantId AND LOWER(name) = LOWER(:name)";
+        Integer count = jdbcClient.sql(sql)
+                .param("restaurantId", restaurantId)
+                .param("name", name)
+                .query(Integer.class)
+                .single();
+        return count != null && count > 0;
+    }
+
+    // --- Submenus ---
+
+    @Override
+    public SubmenuDomain save(SubmenuDomain submenu) {
+        String sql = """
+                    INSERT INTO submenus (menu_id, restaurant_id, name, description, sort_order)
+                    SELECT id, restaurant_id, :name, :description, :sortOrder
+                      FROM menus
+                     WHERE id = :menuId
+                    RETURNING id, menu_id, name, description, sort_order, created_at, updated_at
+                """;
+
+        return jdbcClient.sql(sql)
+                .param("menuId", submenu.getMenuId())
+                .param("name", submenu.getName())
+                .param("description", submenu.getDescription() != null ? submenu.getDescription() : "")
+                .param("sortOrder", submenu.getSortOrder() != null ? submenu.getSortOrder() : 0)
+                .query(this::mapSubmenu)
+                .single();
+    }
+
+    @Override
+    public SubmenuDomain update(SubmenuDomain submenu) {
+        String sql = """
+                    UPDATE submenus
+                    SET name = :name,
+                        description = :description,
+                        sort_order = :sortOrder,
+                        updated_at = NOW()
+                    WHERE id = :id
+                    RETURNING id, menu_id, name, description, sort_order, created_at, updated_at
+                """;
+
+        return jdbcClient.sql(sql)
+                .param("name", submenu.getName())
+                .param("description", submenu.getDescription() != null ? submenu.getDescription() : "")
+                .param("sortOrder", submenu.getSortOrder() != null ? submenu.getSortOrder() : 0)
+                .param("id", submenu.getId())
+                .query(this::mapSubmenu)
+                .single();
+    }
+
+    @Override
+    public Optional<SubmenuDomain> findSubmenuById(UUID submenuId) {
+        String sql = "SELECT * FROM submenus WHERE id = :id";
+        return jdbcClient.sql(sql)
+                .param("id", submenuId)
+                .query(this::mapSubmenu)
+                .optional();
+    }
+
+    @Override
+    public boolean existsByNameInMenu(String name, UUID menuId) {
+        String sql = "SELECT COUNT(1) FROM submenus WHERE menu_id = :menuId AND LOWER(name) = LOWER(:name)";
+        Integer count = jdbcClient.sql(sql)
+                .param("menuId", menuId)
+                .param("name", name)
+                .query(Integer.class)
+                .single();
+        return count != null && count > 0;
+    }
+
+    // --- Submenu nodes ---
+
+    @Override
+    public List<SubmenuNodeDomain> findNodesBySubmenu(UUID restaurantId, UUID submenuId) {
+        String sql = """
+                    SELECT id, submenu_id, node_type, item_id, template_id, sort_order
+                      FROM submenu_nodes
+                     WHERE submenu_id = :submenuId
+                       AND restaurant_id = :restaurantId
+                     ORDER BY sort_order ASC, id ASC
+                """;
+
+        return jdbcClient.sql(sql)
+                .param("submenuId", submenuId)
+                .param("restaurantId", restaurantId)
+                .query(this::mapSubmenuNode)
+                .list();
+    }
+
+        @Override
+        public Optional<SubmenuNodeDomain> findNodeById(UUID nodeId) {
+                String sql = """
+                                        SELECT id, submenu_id, node_type, item_id, template_id, sort_order
+                                            FROM submenu_nodes
+                                         WHERE id = :nodeId
+                                """;
+
+                return jdbcClient.sql(sql)
+                                .param("nodeId", nodeId)
+                                .query(this::mapSubmenuNode)
+                                .optional();
+        }
+
+    @Override
+    public SubmenuNodeDomain saveNode(UUID restaurantId, UUID submenuId, SubmenuNodeType nodeType,
+            UUID referenceId, int sortOrder) {
+        String referenceColumn = nodeType == SubmenuNodeType.PRODUCT ? "item_id" : "template_id";
+        String referenceTable = nodeType == SubmenuNodeType.PRODUCT ? "items" : "templates";
+        String productGuard = nodeType == SubmenuNodeType.PRODUCT
+                ? " AND r.class = 'PRODUCT' AND r.sale_price > 0"
+                : "";
+        String sql = """
+                INSERT INTO submenu_nodes (submenu_id, restaurant_id, node_type, %s, sort_order)
+                SELECT s.id, s.restaurant_id, :nodeType::submenu_node_type, :referenceId, :sortOrder
+                  FROM submenus s
+                  JOIN %s r ON r.id = :referenceId
+                           AND r.restaurant_id = s.restaurant_id
+                           AND r.deleted_at IS NULL
+                           AND r.is_active = TRUE
+                 WHERE s.id = :submenuId
+                   AND s.restaurant_id = :restaurantId
+                   %s
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM submenu_nodes existing
+                        WHERE existing.%s = :referenceId
+                   )
+                RETURNING id, submenu_id, node_type, item_id, template_id, sort_order
+                """.formatted(referenceColumn, referenceTable, productGuard, referenceColumn);
+        return jdbcClient.sql(sql)
+                .param("restaurantId", restaurantId)
+                .param("submenuId", submenuId)
+                .param("nodeType", nodeType.name())
+                .param("referenceId", referenceId)
+                .param("sortOrder", sortOrder)
+                .query(this::mapSubmenuNode)
+                .optional()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "The resource cannot be published: verify tenant, activity, price and existing publications."));
+    }
+
+    @Override
+    public void deleteNode(UUID restaurantId, UUID submenuId, UUID nodeId) {
+        int updated = jdbcClient.sql("""
+                DELETE FROM submenu_nodes
+                 WHERE id = :nodeId
+                   AND submenu_id = :submenuId
+                   AND restaurant_id = :restaurantId
+                """)
+                .param("restaurantId", restaurantId)
+                .param("submenuId", submenuId)
+                .param("nodeId", nodeId)
+                .update();
+        if (updated == 0) {
+            throw new IllegalArgumentException("Submenu node not found.");
+        }
+    }
+
+    // --- Mappers ---
+
+    private MenuDomain mapMenu(ResultSet rs, int rowNum) throws SQLException {
+        return MenuDomain.builder()
+                .id(rs.getObject("id", UUID.class))
+                .restaurantId(rs.getObject("restaurant_id", UUID.class))
+                .name(rs.getString("name"))
+                .description(rs.getString("description"))
+                .createdAt(rs.getObject("created_at", OffsetDateTime.class))
+                .updatedAt(rs.getObject("updated_at", OffsetDateTime.class))
+                .submenus(new ArrayList<>())
+                .build();
+    }
+
+    private SubmenuDomain mapSubmenu(ResultSet rs, int rowNum) throws SQLException {
+        return SubmenuDomain.builder()
+                .id(rs.getObject("id", UUID.class))
+                .menuId(rs.getObject("menu_id", UUID.class))
+                .name(rs.getString("name"))
+                .description(rs.getString("description"))
+                .sortOrder(rs.getInt("sort_order"))
+                .createdAt(rs.getObject("created_at", OffsetDateTime.class))
+                .updatedAt(rs.getObject("updated_at", OffsetDateTime.class))
+                .build();
+    }
+
+    private SubmenuNodeDomain mapSubmenuNode(ResultSet rs, int rowNum) throws SQLException {
+        return new SubmenuNodeDomain(
+                rs.getObject("id", UUID.class),
+                rs.getObject("submenu_id", UUID.class),
+                SubmenuNodeType.valueOf(rs.getString("node_type")),
+                rs.getObject("item_id", UUID.class),
+                rs.getObject("template_id", UUID.class),
+                rs.getInt("sort_order"));
+    }
+}

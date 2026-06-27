@@ -15,7 +15,7 @@ export default function AuthLayout({
 
     useEffect(() => {
         if (!isLoading && isAuthenticated) {
-            router.push("/account/restaurants")
+            router.push("/account/dashboard")
         }
     }, [isLoading, isAuthenticated, router])
 

@@ -124,3 +124,16 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * Radix modal overlays intentionally block outside interactions. Toast actions
+ * remain operable above sheets and dialogs so persistent notifications can be
+ * dismissed without closing the current form.
+ */
+[data-sonner-toaster] {
+  pointer-events: auto !important;
+}
+
+[data-sonner-toast] {
+  pointer-events: auto !important;
+}

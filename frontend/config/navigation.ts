@@ -10,8 +10,13 @@ import {
     Truck,
     ChefHat,
     Receipt,
-    MonitorSmartphone,
-    LayoutGrid
+    LayoutGrid,
+    User,
+    CreditCard,
+    Package,
+    CircleDollarSign,
+    Blocks,
+    BarChart3
 } from "lucide-react"
 import { PermissionModule } from "@/lib/permissions"
 
@@ -34,10 +39,22 @@ export const navigationConfig: NavItem[] = [
                 icon: LayoutDashboard,
             },
             {
-                title: "POS",
-                href: "/pos",
-                icon: Store,
-                module: PermissionModule.ORDERS, // Changed from POS (Uses existing backend module)
+                title: "Inventory",
+                href: "/inventory",
+                icon: Package,
+                module: PermissionModule.INVENTORY,
+            },
+            {
+                title: "Purchases",
+                href: "/purchases",
+                icon: FileText,
+                module: PermissionModule.INVOICES,
+            },
+            {
+                title: "Cash Registers",
+                href: "/cash-registers",
+                icon: CircleDollarSign,
+                module: PermissionModule.CASH,
             },
             {
                 title: "Tables",
@@ -46,62 +63,78 @@ export const navigationConfig: NavItem[] = [
                 module: PermissionModule.TABLES,
             },
             {
+                title: "POS",
+                href: "/pos",
+                icon: Store,
+                module: PermissionModule.ORDERS,
+            },
+            {
+                title: "Orders",
+                href: "/orders",
+                icon: Receipt,
+                module: PermissionModule.ORDERS,
+            },
+            {
                 title: "Live Orders (KDS)",
                 href: "/orders/active",
                 icon: Utensils,
-                module: PermissionModule.KDS, // Updated from ORDERS
-            }
+                module: PermissionModule.KDS,
+            },
+            {
+                title: "Payment Methods",
+                href: "/payment-methods",
+                icon: CreditCard,
+                module: PermissionModule.PAYMENTS,
+            },
         ]
     },
     {
-        title: "Inventory & Catalog",
-        module: PermissionModule.INVENTORY,
+        title: "Catalog",
         items: [
-            {
-                title: "Ingredients",
-                href: "/ingredients",
-                icon: Archive,
-            },
-            {
-                title: "Recipes",
-                href: "/recipes",
-                icon: ChefHat,
-                module: PermissionModule.RECIPES,
-            },
-            {
-                title: "Products",
-                href: "/products",
-                icon: ShoppingCart,
-                module: PermissionModule.CATALOG,
-            },
             {
                 title: "Menus",
                 href: "/menus",
                 icon: FileText,
-                module: PermissionModule.CATALOG,
-            }
+                module: PermissionModule.MENUS,
+            },
+            {
+                title: "Preparaciones",
+                href: "/preparations",
+                icon: ChefHat,
+                module: PermissionModule.PREPARATIONS,
+            },
+            {
+                title: "Productos",
+                href: "/products",
+                icon: Package,
+                module: PermissionModule.PRODUCTS,
+            },
+            {
+                title: "Armables",
+                href: "/templates",
+                icon: Blocks,
+                module: PermissionModule.TEMPLATES,
+            },
         ]
     },
     {
-        title: "Management",
+        title: "Reports",
         items: [
             {
-                title: "Sales & Reports",
+                title: "Operational Reports",
                 href: "/reports",
-                icon: Receipt,
-                module: PermissionModule.FINANCE, // Updated from RESTAURANT
+                icon: BarChart3,
+                module: PermissionModule.FINANCE,
             },
+        ]
+    },
+    {
+        title: "Account",
+        items: [
             {
-                title: "Staff",
-                href: "/staff",
-                icon: Users,
-                module: PermissionModule.RESTAURANTS, // Changed from STAFF to RESTAURANTS (Managing business)
-            },
-            {
-                title: "Suppliers",
-                href: "/suppliers",
-                icon: Truck,
-                module: PermissionModule.INVENTORY,
+                title: "Back to Account Central",
+                href: "/account/restaurants",
+                icon: User,
             }
         ]
     },
@@ -115,11 +148,97 @@ export const navigationConfig: NavItem[] = [
                 icon: Settings,
             },
             {
-                title: "Devices",
-                href: "/devices",
-                icon: MonitorSmartphone,
-                module: PermissionModule.OPERATIONS,
+                title: "Staff",
+                href: "/staff",
+                icon: Users,
+                module: PermissionModule.STAFF,
             },
         ]
     }
 ]
+
+export const accountNavigationConfig: NavItem[] = [
+    {
+        title: "My Business",
+        items: [
+            {
+                title: "Dashboard",
+                href: "/account/dashboard",
+                icon: LayoutDashboard,
+            },
+            {
+                title: "Restaurants",
+                href: "/account/restaurants",
+                icon: Store,
+            },
+            {
+                title: "Cash Sessions",
+                href: "/account/cash-sessions",
+                icon: CircleDollarSign,
+                module: PermissionModule.CASH,
+            },
+            {
+                title: "Reports",
+                href: "/account/reports",
+                icon: BarChart3,
+            },
+            {
+                title: "Staff",
+                href: "/account/staff",
+                icon: Users,
+                module: PermissionModule.STAFF,
+            }
+        ]
+    },
+    {
+        title: "Master Catalog",
+        module: PermissionModule.INVENTORY,
+        items: [
+            {
+                title: "Ingredients",
+                href: "/account/ingredients",
+                icon: Archive,
+            },
+            {
+                title: "Recipes",
+                href: "/account/recipes",
+                icon: ChefHat,
+                module: PermissionModule.PREPARATIONS,
+            },
+            {
+                title: "Products",
+                href: "/account/products",
+                icon: ShoppingCart,
+                module: PermissionModule.CATALOG,
+            },
+            {
+                title: "Menus",
+                href: "/account/menus",
+                icon: FileText,
+                module: PermissionModule.CATALOG,
+            },
+            {
+                title: "Suppliers",
+                href: "/account/suppliers",
+                icon: Truck,
+                module: PermissionModule.INVENTORY,
+            }
+        ]
+    },
+    {
+        title: "Settings",
+        items: [
+            {
+                title: "Profile",
+                href: "/account/profile",
+                icon: User,
+            },
+            {
+                title: "Billing",
+                href: "/account/billing",
+                icon: CreditCard,
+            }
+        ]
+    }
+]
+

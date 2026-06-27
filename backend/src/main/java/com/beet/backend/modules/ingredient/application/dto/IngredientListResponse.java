@@ -10,6 +10,7 @@ import java.util.UUID;
 public record IngredientListResponse(
         UUID id,
         String name,
+        UUID baseUnitId,          // NEW: needed for generic unit filtering
         String unitAbbreviation, // units.abbreviation e.g. "kg"
         BigDecimal costPerBaseUnit // supplier_items.last_cost_base; null if no active supplier yet
 ) {

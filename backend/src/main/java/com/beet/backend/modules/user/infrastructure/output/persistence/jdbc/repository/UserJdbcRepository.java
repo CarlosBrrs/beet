@@ -10,12 +10,16 @@ import java.util.UUID;
 
 public interface UserJdbcRepository extends CrudRepository<UserAggregate, UUID> {
 
+    @Query("SELECT * FROM users WHERE LOWER(email) = LOWER(:email) AND deleted_at IS NULL")
     Optional<UserAggregate> findByEmail(String email);
 
+    @Query("SELECT COUNT(*) > 0 FROM users WHERE LOWER(email) = LOWER(:email) AND deleted_at IS NULL")
     boolean existsByEmail(String email);
 
+    @Query("SELECT COUNT(*) > 0 FROM users WHERE username = :username AND deleted_at IS NULL")
     boolean existsByUsername(String username);
 
+    @Query("SELECT COUNT(*) > 0 FROM users WHERE phone_number = :phoneNumber AND deleted_at IS NULL")
     boolean existsByPhoneNumber(String phoneNumber);
 
     // TODO remover luego de implementar el servicio de suscripciones

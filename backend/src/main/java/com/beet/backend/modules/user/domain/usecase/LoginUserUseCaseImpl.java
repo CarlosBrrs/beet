@@ -13,6 +13,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+
 @Service
 @RequiredArgsConstructor
 public class LoginUserUseCaseImpl implements LoginUserServicePort {
@@ -31,6 +33,10 @@ public class LoginUserUseCaseImpl implements LoginUserServicePort {
 
         User user = userPersistencePort.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        Instant lastLoginAt = Instant.now();
+        user.setLastLoginAt(lastLoginAt);
+        userPersistencePort.updateLastLoginAt(user.getId(), lastLoginAt);
 
         var userDetails = new CustomUserDetails(user);
 

@@ -14,6 +14,12 @@ public enum PermissionModule {
     CASH,
     PAYMENTS,
     KITCHEN,
+    INVOICES,
+    MENUS,
+    PRODUCTS,
+    PREPARATIONS,
+    TEMPLATES,
+    STAFF,
     // Wildcard for "all modules"
     ALL
 }

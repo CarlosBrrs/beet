@@ -3,7 +3,6 @@ package com.beet.backend.modules.restaurant.application.handler;
 import com.beet.backend.modules.restaurant.application.dto.RestaurantRequest;
 import com.beet.backend.modules.restaurant.application.dto.RestaurantResponse;
 import com.beet.backend.modules.restaurant.application.dto.RestaurantUpdateRequest;
-import com.beet.backend.modules.restaurant.application.dto.UserRestaurantPermissionsResponse;
 import com.beet.backend.shared.infrastructure.input.rest.ApiGenericResponse;
 
 import java.util.List;
@@ -17,6 +16,4 @@ public interface RestaurantHandler {
     ApiGenericResponse<List<RestaurantResponse>> getRestaurantsByOwner(UUID ownerId);
 
     ApiGenericResponse<RestaurantResponse> update(UUID id, RestaurantUpdateRequest request, UUID ownerId);
-
-    ApiGenericResponse<UserRestaurantPermissionsResponse> getPermissions(UUID restaurantId, UUID userId);
 }

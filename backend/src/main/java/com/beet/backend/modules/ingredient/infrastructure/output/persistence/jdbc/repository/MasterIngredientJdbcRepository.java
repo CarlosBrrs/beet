@@ -10,4 +10,6 @@ import java.util.UUID;
 public interface MasterIngredientJdbcRepository extends ListCrudRepository<MasterIngredientAggregate, UUID> {
 
     boolean existsByNameAndOwnerId(String name, UUID ownerId);
+
+    boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
 }
