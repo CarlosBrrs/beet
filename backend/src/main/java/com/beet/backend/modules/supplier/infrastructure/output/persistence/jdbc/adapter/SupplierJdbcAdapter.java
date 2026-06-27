@@ -34,8 +34,51 @@ public class SupplierJdbcAdapter implements SupplierPersistencePort, SupplierQue
 
     @Override
     public SupplierDomain save(SupplierDomain supplier) {
-        var saved = repository.save(mapper.toAggregate(supplier));
-        return mapper.toDomain(saved);
+        if (supplier.getId() == null) {
+            var saved = repository.save(mapper.toAggregate(supplier));
+            return mapper.toDomain(saved);
+        }
+        return jdbcClient.sql("""
+                        UPDATE suppliers
+                           SET document_type_id = :documentTypeId,
+                               document_number = :documentNumber,
+                               name = :name,
+                               contact_name = :contactName,
+                               email = :email,
+                               phone = :phone,
+                               address = :address,
+                               is_active = :isActive,
+                               updated_at = NOW()
+                         WHERE id = :id
+                           AND owner_id = :ownerId
+                           AND deleted_at IS NULL
+                     RETURNING id, owner_id, document_type_id, document_number, name,
+                               contact_name, email, phone, address, is_active
+                        """)
+                .param("id", supplier.getId())
+                .param("ownerId", supplier.getOwnerId())
+                .param("documentTypeId", supplier.getDocumentTypeId())
+                .param("documentNumber", supplier.getDocumentNumber())
+                .param("name", supplier.getName())
+                .param("contactName", supplier.getContactName())
+                .param("email", supplier.getEmail())
+                .param("phone", supplier.getPhone())
+                .param("address", supplier.getAddress())
+                .param("isActive", supplier.getIsActive())
+                .query((rs, rowNum) -> SupplierDomain.builder()
+                        .id(rs.getObject("id", UUID.class))
+                        .ownerId(rs.getObject("owner_id", UUID.class))
+                        .documentTypeId(rs.getObject("document_type_id", UUID.class))
+                        .documentNumber(rs.getString("document_number"))
+                        .name(rs.getString("name"))
+                        .contactName(rs.getString("contact_name"))
+                        .email(rs.getString("email"))
+                        .phone(rs.getString("phone"))
+                        .address(rs.getString("address"))
+                        .isActive(rs.getBoolean("is_active"))
+                        .build())
+                .optional()
+                .orElseThrow(() -> new IllegalArgumentException("Supplier not found."));
     }
 
     @Override

@@ -40,8 +40,35 @@ public class IngredientJdbcAdapter implements IngredientPersistencePort, Ingredi
 
         @Override
         public MasterIngredientDomain saveMasterIngredient(MasterIngredientDomain ingredient) {
-                var saved = ingredientRepository.save(mapper.toAggregate(ingredient));
-                return mapper.toDomain(saved);
+                if (ingredient.getId() == null) {
+                        var saved = ingredientRepository.save(mapper.toAggregate(ingredient));
+                        return mapper.toDomain(saved);
+                }
+                return jdbcClient.sql("""
+                                UPDATE master_ingredients
+                                   SET name = :name,
+                                       base_unit_id = :baseUnitId,
+                                       active_supplier_item_id = :activeSupplierItemId,
+                                       updated_at = NOW()
+                                 WHERE id = :id
+                                   AND owner_id = :ownerId
+                                   AND deleted_at IS NULL
+                             RETURNING id, owner_id, name, base_unit_id, active_supplier_item_id
+                                """)
+                                .param("id", ingredient.getId())
+                                .param("ownerId", ingredient.getOwnerId())
+                                .param("name", ingredient.getName())
+                                .param("baseUnitId", ingredient.getBaseUnitId())
+                                .param("activeSupplierItemId", ingredient.getActiveSupplierItemId())
+                                .query((rs, rowNum) -> MasterIngredientDomain.builder()
+                                                .id(rs.getObject("id", UUID.class))
+                                                .ownerId(rs.getObject("owner_id", UUID.class))
+                                                .name(rs.getString("name"))
+                                                .baseUnitId(rs.getObject("base_unit_id", UUID.class))
+                                                .activeSupplierItemId(rs.getObject("active_supplier_item_id", UUID.class))
+                                                .build())
+                                .optional()
+                                .orElseThrow(() -> new IllegalArgumentException("Ingredient not found."));
         }
 
         @Override
